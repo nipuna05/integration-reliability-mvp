@@ -131,7 +131,7 @@ test('server: test alert goes out by email, status endpoint shows masked address
     assert.equal((await call(3806, '/api/alerts/test', { method: 'POST' })).status, 401);
     const { json } = await call(3806, '/api/login', { method: 'POST', body: { password: 'pw123' } });
     const h = { authorization: `Bearer ${json.token}` };
-    assert.deepEqual((await call(3806, '/api/alerts', { headers: h })).json, { webhook: false, email: { enabled: true, to: ['a***@example.test'] } });
+    assert.deepEqual((await call(3806, '/api/alerts', { headers: h })).json, { weeklyDigest: false, webhook: false, email: { enabled: true, to: ['a***@example.test'] } });
     const t = await call(3806, '/api/alerts/test', { method: 'POST', headers: h });
     assert.equal(t.json.email, 'sent');
     assert.ok(log.cmds.includes('RCPT TO:<alice@example.test>'));
@@ -167,4 +167,22 @@ test('stats: a break and a fix produce an incident with a duration and lowered u
     assert.equal(up.runs >= 4, true);
     assert.equal(up.pct < 100 && up.pct > 0, true);
   } finally { p.kill(); }
+});
+
+test('weekly report: signed-in users can send it by email now; guests cannot', async () => {
+  const { server, log, port } = await fakeSmtp();
+  const p = await startServer(3808, { APP_PASSWORD: 'pw123', PUBLIC_DEMO: '1', WEEKLY_DIGEST: '1', SMTP_HOST: 'localhost', SMTP_PORT: String(port), SMTP_SECURE: '0', ALERT_EMAIL_FROM: 'alerts@x.test', ALERT_EMAIL_TO: 'alice@example.test' });
+  try {
+    assert.equal((await call(3808, '/api/digest/send', { method: 'POST' })).status, 401);
+    const { json } = await call(3808, '/api/login', { method: 'POST', body: { password: 'pw123' } });
+    const h = { authorization: `Bearer ${json.token}` };
+    assert.equal((await call(3808, '/api/alerts', { headers: h })).json.weeklyDigest, true);
+    await call(3808, '/api/run', { method: 'POST' });
+    const r = await call(3808, '/api/digest/send', { method: 'POST', headers: h });
+    assert.equal(r.json.email, 'sent');
+    assert.ok(log.cmds.includes('RCPT TO:<alice@example.test>'));
+    const body = Buffer.from(log.data.split('\n\n').slice(1).join('').replace(/\s/g, ''), 'base64').toString();
+    assert.match(body, /Reliability report/);
+    assert.match(body, /Uptime \(last 7 days\)/);
+  } finally { p.kill(); server.close(); }
 });

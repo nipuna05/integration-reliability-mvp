@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { runAll, runCheck } from './lib/runner.js';
 import { handleDemo } from './lib/demo.js';
-import { detectTransitions, dispatch, sendTestAlert } from './lib/alerts.js';
+import { detectTransitions, dispatch, sendTestAlert, sendWebhook } from './lib/alerts.js';
+import { buildDigest } from './lib/digest.js';
 import { createMailer } from './lib/mailer.js';
 import { validateChecks } from './lib/checks.js';
 import { createAuth, viaProxy } from './lib/auth.js';
@@ -33,6 +34,9 @@ let checks = JSON.parse(await readFile(existsSync(CHECKS_FILE) ? CHECKS_FILE : p
 let history = existsSync(HISTORY_FILE) ? JSON.parse(await readFile(HISTORY_FILE, 'utf8')) : [];
 const STATS_FILE = path.join(DATA_DIR, 'stats.json');
 const stats = createStats(existsSync(STATS_FILE) ? JSON.parse(await readFile(STATS_FILE, 'utf8')) : undefined);
+const DIGEST_FILE = path.join(DATA_DIR, 'digest.json');
+const WEEKLY_DIGEST = process.env.WEEKLY_DIGEST === '1';
+let lastDigestAt = existsSync(DIGEST_FILE) ? JSON.parse(await readFile(DIGEST_FILE, 'utf8')).lastSentAt : undefined;
 const secrets = await createSecretStore(path.join(DATA_DIR, 'secrets.json'), process.env.SECRETS_KEY);
 const WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
 const mailer = createMailer();
@@ -78,6 +82,20 @@ async function runAndRecord(list = checks) {
   await writeFile(STATS_FILE, JSON.stringify(stats.toJSON())).catch(() => {});
   await dispatch(events, { webhookUrl: WEBHOOK_URL, mailer });
   return results;
+}
+
+// Sends the reliability report by email and chat webhook (whichever are configured).
+async function sendDigest() {
+  const { subject, text } = buildDigest({ checks, summary: stats.summary(checks.map((c) => c.id)) });
+  const out = {};
+  out.email = !mailer ? 'not configured' : await mailer.send(subject, text).then(() => 'sent', (e) => `failed: ${e.message}`);
+  out.webhook = !WEBHOOK_URL ? 'not configured' : await sendWebhook(WEBHOOK_URL, `${subject}\n\n${text}`).then(() => 'sent', (e) => `failed: ${e.message}`);
+  return out;
+}
+async function saveDigestTime(t) {
+  lastDigestAt = t;
+  await mkdir(DATA_DIR, { recursive: true });
+  await writeFile(DIGEST_FILE, JSON.stringify({ lastSentAt: t })).catch(() => {});
 }
 
 // Editing checks makes the server call arbitrary URLs, so it needs a login. With no
@@ -167,7 +185,11 @@ const server = http.createServer(async (req, res) => {
       const check = buildCheck(parsed, { status: probe.status, secretNames, existingIds: checks.map((c) => c.id) });
       return send(res, 200, redact({ check, preview: probe, secretsSaved: secretNames.map((s) => s.name) }, secrets.values()));
     }
-    if (pathname === '/api/alerts' && req.method === 'GET') return send(res, 200, { webhook: Boolean(WEBHOOK_URL), email: mailer ? { enabled: true, to: mailer.maskedTo } : { enabled: false } });
+    if (pathname === '/api/digest/send' && req.method === 'POST') {
+      if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
+      return send(res, 200, await sendDigest());
+    }
+    if (pathname === '/api/alerts' && req.method === 'GET') return send(res, 200, { weeklyDigest: WEEKLY_DIGEST, webhook: Boolean(WEBHOOK_URL), email: mailer ? { enabled: true, to: mailer.maskedTo } : { enabled: false } });
     if (pathname === '/api/alerts/test' && req.method === 'POST') {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
       return send(res, 200, await sendTestAlert({ webhookUrl: WEBHOOK_URL, mailer }));
@@ -184,6 +206,12 @@ const server = http.createServer(async (req, res) => {
 const intervalSec = Number(process.env.INTERVAL_SEC || 60);
 server.listen(PORT, () => {
   console.log(`Integration Reliability MVP on http://localhost:${PORT}  (scheduled run every ${intervalSec}s, login ${auth.enabled ? 'ON' : 'OFF'})`);
+  // weekly report: first one goes out 7 days after the feature is switched on, then every 7 days
+  if (WEEKLY_DIGEST) setInterval(async () => {
+    if (!mailer && !WEBHOOK_URL) return;
+    if (lastDigestAt === undefined) return saveDigestTime(Date.now());
+    if (Date.now() - lastDigestAt >= 7 * 86400_000) { await saveDigestTime(Date.now()); await sendDigest(); }
+  }, 60_000);
   let busy = false; // never start a new round while the previous one is still running
   setInterval(async () => {
     if (busy) return;

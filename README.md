@@ -51,3 +51,6 @@ Each check may set `"every": "30s" | "5m" | "1h" | "1d"` (editor: the **Runs** m
 
 ## Uptime and incidents
 Every run is counted per day (kept 35 days). Cards show uptime for the last 7 days; **Recent incidents** lists each outage: when it started, how long it lasted (or that it is ongoing), the failing step and the likely cause. Guests can read it on the public demo. Data is in `data/stats.json`. Endpoint: `GET /api/stats`.
+
+## Weekly report
+Set `WEEKLY_DIGEST=1` to email (and post to the chat webhook) a plain-text reliability report every 7 days: uptime per check and every incident of the week with duration and likely cause. The first one is sent 7 days after switching it on. **Alerts -> Send the weekly report now** sends one immediately.
