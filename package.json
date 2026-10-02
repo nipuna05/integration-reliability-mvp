@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "test:ui": "node scripts/ui-smoke.mjs"
+    "test:ui": "node scripts/ui-smoke.mjs",
+    "test:phone-ui": "node scripts/mobile-web-smoke.mjs"
   },
   "engines": {
     "node": ">=20"

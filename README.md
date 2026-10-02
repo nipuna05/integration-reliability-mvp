@@ -60,3 +60,6 @@ Set `STATUS_PAGE=1` (and optionally `STATUS_TITLE`) to publish `/status` to anyo
 
 ## Phone push notifications
 The phone app registers its Expo push token with `POST /api/devices` (signed in). On every failure and recovery the server asks Expo's push service (which delivers through Firebase) to notify all registered phones; uninstalled apps are removed automatically. **Alerts -> Send test alert** reports the push result. Requires a Firebase project, the FCM V1 service-account key uploaded with `eas credentials`, and an installed EAS build (push does not work in Expo Go on Android). Override the push endpoint with `EXPO_PUSH_URL` (tests do this).
+
+## Phone app
+`mobile/` is an Expo (React Native) Android app: Status, Incidents, Add (from curl), Settings (sign in, phone alerts). See `docs/08-phone-app.md` for build, install and test steps. `npm run test:phone-ui` renders it in headless Edge against a real server (after `cd mobile && npx expo export --platform web --output-dir dist-web`).
