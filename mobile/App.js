@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createApi } from './src/api.js';
 import { fmtAgo, fmtDuration, lastRunFor, normalizeUrl, overallState, scheduleLabel } from './src/format.js';
@@ -15,9 +16,14 @@ const theme = (dark) => dark
   : { bg: '#f6f7f9', card: '#ffffff', text: '#1c2430', muted: '#6b7686', ok: '#1a7f4b', bad: '#c62828', line: '#e3e6eb', accent: '#1c2430', onAccent: '#ffffff' };
 
 export default function App() {
+  return <SafeAreaProvider><Main /></SafeAreaProvider>;
+}
+
+function Main() {
   const dark = useColorScheme() === 'dark';
+  const insets = useSafeAreaInsets(); // keeps the tab bar clear of Android's gesture bar and the title clear of the status bar
   const t = useMemo(() => theme(dark), [dark]);
-  const s = useMemo(() => makeStyles(t), [t]);
+  const s = useMemo(() => makeStyles(t, insets), [t, insets]);
 
   const [booting, setBooting] = useState(true);
   const [serverUrl, setServerUrl] = useState('');
@@ -132,7 +138,7 @@ function Connect({ s, t, initialUrl, previousError, onConnect }) {
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <Text style={s.title}>Integration Reliability</Text>
-      <Text style={s.muted}>Connect to your server to watch your checks from your phone.</Text>
+      <Text style={[s.muted, { marginBottom: 14 }]}>Connect to your server to watch your checks from your phone.</Text>
       <View style={s.card}>
         <Text style={s.label}>Server address</Text>
         <TextInput style={s.input} value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="http://192.168.1.20:3000" placeholderTextColor={t.muted} />
@@ -239,6 +245,7 @@ function AddTab({ s, t, api, session, refresh, goSettings }) {
       <View style={s.card}>
         <Text style={s.name}>Paste a curl command</Text>
         <Text style={s.hint}>From API docs, Postman, or the browser (Network tab, Copy as cURL). The server calls it once, hides any key as a secret, and builds the check.</Text>
+        <Text style={s.hint}>Note: the address must work from the server's computer, not just from your phone.</Text>
         <TextInput style={[s.input, { minHeight: 90, textAlignVertical: 'top' }]} multiline value={command} onChangeText={setCommand} autoCapitalize="none" autoCorrect={false} placeholder="curl https://api.example.com/status" placeholderTextColor={t.muted} />
         <Btn s={s} label={busy && !result ? 'Trying…' : 'Try it'} onPress={tryIt} disabled={busy || !command.trim()} />
       </View>
@@ -339,8 +346,8 @@ function Btn({ s, label, onPress, primary, disabled }) {
   );
 }
 
-const makeStyles = (t) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: t.bg, paddingTop: 52, paddingHorizontal: 16 },
+const makeStyles = (t, insets) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: t.bg, paddingTop: Math.max(insets.top, 24) + 16, paddingHorizontal: 16 },
   center: { alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 22, fontWeight: '700', color: t.text, marginBottom: 8 },
   banner: { fontSize: 17, fontWeight: '700', marginBottom: 10 },
@@ -366,7 +373,7 @@ const makeStyles = (t) => StyleSheet.create({
   btnTextPrimary: { color: t.onAccent },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
   tickbox: { color: t.text, fontSize: 20 },
-  tabs: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: t.line, paddingVertical: 10 },
+  tabs: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: t.line, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 12) + 10 },
   tab: { flex: 1, alignItems: 'center' },
   tabText: { color: t.muted, fontWeight: '600' },
   tabActive: { color: t.text, textDecorationLine: 'underline' },

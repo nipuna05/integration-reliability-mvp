@@ -184,7 +184,7 @@ const server = http.createServer(async (req, res) => {
         const text = await r.text();
         let json; try { json = JSON.parse(text); } catch { /* not JSON */ }
         probe = { status: r.status, fields: previewFields(json) };
-      } catch (e) { return send(res, 400, { error: `Could not reach ${parsed.host}: ${e.cause?.code || e.message}` }); }
+      } catch (e) { return send(res, 400, { error: `Could not reach ${parsed.host}: ${e.name === 'TimeoutError' ? 'no answer within 8 seconds. The address must be reachable from the computer running this server.' : e.cause?.code || e.message}` }); }
       const taken = secrets.names(), secretNames = [];
       try {
         for (const item of parsed.sensitive) {
