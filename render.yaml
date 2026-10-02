@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: integration-reliability
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: INTERVAL_SEC
+        value: "300"

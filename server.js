@@ -33,6 +33,7 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, 'http://x');
   try {
     if (pathname.startsWith('/demo/')) return await handleDemo(req, res, pathname);
+    if (pathname === '/healthz') return send(res, 200, { ok: true });
     if (pathname === '/api/checks') return send(res, 200, checks);
     if (pathname === '/api/history') return send(res, 200, history);
     if (pathname === '/api/run' && req.method === 'POST') return send(res, 200, await runAndRecord());
