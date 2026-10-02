@@ -16,3 +16,7 @@ Edit `checks.json`: ordered steps with `{{vars}}`, `extract` (save a response fi
 
 ## Next
 See docs/ for the product brief, roadmap, interview guide and Play Store checklist.
+
+## Alerts
+Set ALERT_WEBHOOK_URL to a Teams, Slack or Discord incoming-webhook URL. A message is sent when a check starts failing and when it recovers (not on every failing run).
+    $env:ALERT_WEBHOOK_URL='https://...'; npm start

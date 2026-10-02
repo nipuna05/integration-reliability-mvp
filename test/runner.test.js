@@ -39,3 +39,23 @@ test('unreachable system fails the step instead of throwing', async () => {
   const r = await runCheck({ id: 'x', name: 'x', steps: [{ name: 's', url: 'http://localhost:1/nope' }] }, {}, { timeoutMs: 500 });
   assert.equal(r.ok, false);
 });
+
+import { detectTransitions, dispatch } from '../lib/alerts.js';
+
+const res = (ok) => ({ id: 'c', name: 'C', ok, failedStep: ok ? null : 's', failures: ok ? [] : ['bad'] });
+
+test('alerts fire only on status changes', () => {
+  const last = new Map();
+  assert.equal(detectTransitions(last, [res(true)]).length, 0);   // first pass: quiet
+  assert.equal(detectTransitions(last, [res(false)])[0].type, 'failed');
+  assert.equal(detectTransitions(last, [res(false)]).length, 0);  // still failing: no spam
+  assert.equal(detectTransitions(last, [res(true)])[0].type, 'recovered');
+});
+
+test('first-ever failure alerts, and webhook receives the message', async () => {
+  const events = detectTransitions(new Map(), [res(false)]);
+  assert.equal(events.length, 1);
+  const sent = [];
+  await dispatch(events, { webhookUrl: 'http://x', send: async (u, t) => sent.push(t) });
+  assert.match(sent[0], /FAILED: C/);
+});

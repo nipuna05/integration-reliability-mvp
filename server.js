@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { runAll } from './lib/runner.js';
 import { handleDemo } from './lib/demo.js';
+import { detectTransitions, dispatch } from './lib/alerts.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -13,6 +14,10 @@ const MAX_HISTORY = 200;
 
 const checks = JSON.parse(await readFile(path.join(root, 'checks.json'), 'utf8'));
 let history = existsSync(HISTORY_FILE) ? JSON.parse(await readFile(HISTORY_FILE, 'utf8')) : [];
+const WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
+// newest run per check, so alerts only fire when status changes
+const lastStatus = new Map();
+for (const h of [...history].reverse()) lastStatus.set(h.id, h.ok);
 
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, { 'content-type': type });
@@ -24,8 +29,7 @@ async function runAndRecord() {
   history = [...results, ...history].slice(0, MAX_HISTORY);
   await mkdir(path.dirname(HISTORY_FILE), { recursive: true });
   await writeFile(HISTORY_FILE,JSON.stringify(history, null, 2)).catch(() => {});
-  const failed = results.filter((r) => !r.ok);
-  for (const f of failed) console.log(`ALERT  ${f.name} — failed at "${f.failedStep}": ${f.failures.join('; ')}`);
+  await dispatch(detectTransitions(lastStatus, results), { webhookUrl: WEBHOOK_URL });
   return results;
 }
 
