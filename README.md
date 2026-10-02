@@ -15,4 +15,4 @@ Edit `checks.json`: ordered steps with `{{vars}}`, `extract` (save a response fi
 `expect` (status + JSON field assertions). Point the URLs at real systems to use it for real.
 
 ## Next
-Alert channels (email/Teams/push), auth headers/secrets, per-customer config, mobile companion app.
+See docs/ for the product brief, roadmap, interview guide and Play Store checklist.
