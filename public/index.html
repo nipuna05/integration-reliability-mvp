@@ -30,6 +30,7 @@
   .hidden { display:none; } pre.out { white-space:pre-wrap; font-size:13px; margin:10px 0 0; }
   .stepno { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background:var(--accent); color:#fff; font-size:13px; font-weight:600; margin-right:8px; }
   .section { margin-top:18px; } .section > .head { display:flex; align-items:center; margin-bottom:6px; font-weight:600; }
+  .inc { padding:10px 0; border-top:1px solid var(--line); } .inc:first-of-type { border-top:0; }
   .chk { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; }
   details { border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-top:10px; }
   summary { cursor:pointer; font-weight:600; }
@@ -53,6 +54,7 @@
   </div>
   <div id="app">
     <div id="list"></div>
+    <div id="incidents"></div>
     <div class="bar"><button id="editToggle" class="hidden">Add or change checks</button><button id="logout" class="hidden">Sign out</button><span class="muted" id="editNote" style="align-self:center"></span></div>
 
     <div id="editor" class="card hidden">
@@ -125,7 +127,7 @@ const api = async (url, opts) => {
 };
 
 async function render() {
-  const [checks, history, demo] = await Promise.all(['/api/checks', '/api/history', '/demo/state'].map((u) => api(u).then((r) => r.json())));
+  const [checks, history, demo, stats] = await Promise.all(['/api/checks', '/api/history', '/demo/state', '/api/stats'].map((u) => api(u).then((r) => r.json())));
   $('state').textContent = demo.broken ? 'Demo sync: BROKEN' : 'Demo sync: healthy';
   $('list').innerHTML = checks.map((c) => {
     const runs = history.filter((h) => h.id === c.id);
@@ -137,9 +139,22 @@ async function render() {
     const why = last && !last.ok && last.explanation ? `<div class="why"><b>Likely cause</b> <span class="muted">${last.explanation.source === 'ai' ? '(AI)' : ''}</span><br>${esc(last.explanation.text)}</div>` : '';
     const spark = `<div class="spark">${runs.slice(0, 30).reverse().map((r) => `<i class="${r.ok ? '' : 'bad'}" title="${r.at}"></i>`).join('')}</div>`;
     return `<div class="card"><div class="row"><strong>${esc(c.name)}</strong>${status}</div>
-      <div class="muted">${last ? `last run ${new Date(last.at).toLocaleTimeString()} · ${last.ms}ms · ` : ''}${scheduleText(c)}</div>${steps}${why}${spark}</div>`;
+      <div class="muted">${last ? `last run ${new Date(last.at).toLocaleTimeString()} · ${last.ms}ms · ` : ''}${scheduleText(c)}${uptimeText(stats.checks[c.id])}</div>${steps}${why}${spark}</div>`;
   }).join('');
+  const inc = stats.incidents.slice(0, 8);
+  $('incidents').innerHTML = inc.length
+    ? `<div class="card"><h2>Recent incidents</h2>${inc.map((i) => `<div class="inc"><div class="row"><strong>${esc(i.name)}</strong>${i.ongoing ? '<span class="pill bad">ONGOING</span>' : '<span class="pill ok">resolved</span>'}</div>
+        <div class="muted">${new Date(i.startedAt).toLocaleString()} · ${i.ongoing ? 'broken for' : 'lasted'} ${fmtDur(i.durationSec)}</div>
+        <div class="muted">${esc(i.failedStep || '')}${i.failure ? ': ' + esc(i.failure) : ''}</div>${i.cause ? `<div class="muted">Likely cause: ${esc(i.cause)}</div>` : ''}</div>`).join('')}</div>`
+    : '';
 }
+function fmtDur(s) {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m${s % 60 ? ` ${s % 60}s` : ''}`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60) ? ` ${Math.floor((s % 3600) / 60)}m` : ''}`;
+  return `${Math.floor(s / 86400)}d`;
+}
+const uptimeText = (u) => (u && u.uptime7d.pct !== null ? ` · uptime ${u.uptime7d.pct}% (7 days, ${u.uptime7d.runs} runs)` : '');
 
 async function boot() {
   session = await fetch('/api/session').then((r) => r.json());

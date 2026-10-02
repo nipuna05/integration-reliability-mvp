@@ -15,6 +15,7 @@ import { createExplainer } from './lib/explain.js';
 import { parseCurl, buildCheck, secretNameFor, previewFields, CurlError } from './lib/curl.js';
 import { redact } from './lib/secrets.js';
 import { dueChecks, trimHistory } from './lib/schedule.js';
+import { createStats } from './lib/stats.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -30,13 +31,15 @@ const BASE = { base: `http://localhost:${PORT}` };
 // User-edited checks live in data/; checks.json in the repo is the starter set.
 let checks = JSON.parse(await readFile(existsSync(CHECKS_FILE) ? CHECKS_FILE : path.join(root, 'checks.json'), 'utf8'));
 let history = existsSync(HISTORY_FILE) ? JSON.parse(await readFile(HISTORY_FILE, 'utf8')) : [];
+const STATS_FILE = path.join(DATA_DIR, 'stats.json');
+const stats = createStats(existsSync(STATS_FILE) ? JSON.parse(await readFile(STATS_FILE, 'utf8')) : undefined);
 const secrets = await createSecretStore(path.join(DATA_DIR, 'secrets.json'), process.env.SECRETS_KEY);
 const WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
 const mailer = createMailer();
 const auth = createAuth(process.env.APP_PASSWORD);
 // PUBLIC_DEMO=1: anyone can view and run checks; only editing needs the password.
 const PUBLIC_DEMO = process.env.PUBLIC_DEMO === '1';
-const isPublicRead = (req, p) => PUBLIC_DEMO && ((req.method === 'GET' && (p === '/api/checks' || p === '/api/history')) || (req.method === 'POST' && p === '/api/run'));
+const isPublicRead = (req, p) => PUBLIC_DEMO && ((req.method === 'GET' && (p === '/api/checks' || p === '/api/history' || p === '/api/stats')) || (req.method === 'POST' && p === '/api/run'));
 // newest run per check, so alerts only fire when status changes
 const lastStatus = new Map();
 for (const h of [...history].reverse()) lastStatus.set(h.id, h.ok);
@@ -70,7 +73,10 @@ async function runAndRecord(list = checks) {
   history = trimHistory([...results, ...history], MAX_HISTORY_PER_CHECK);
   await mkdir(DATA_DIR, { recursive: true });
   await writeFile(HISTORY_FILE, JSON.stringify(history, null, 2)).catch(() => {});
-  await dispatch(detectTransitions(lastStatus, results), { webhookUrl: WEBHOOK_URL, mailer });
+  const events = detectTransitions(lastStatus, results);
+  stats.record(results, events);
+  await writeFile(STATS_FILE, JSON.stringify(stats.toJSON())).catch(() => {});
+  await dispatch(events, { webhookUrl: WEBHOOK_URL, mailer });
   return results;
 }
 
@@ -166,6 +172,7 @@ const server = http.createServer(async (req, res) => {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
       return send(res, 200, await sendTestAlert({ webhookUrl: WEBHOOK_URL, mailer }));
     }
+    if (pathname === '/api/stats' && req.method === 'GET') return send(res, 200, stats.summary(checks.map((c) => c.id)));
     if (pathname === '/api/history') return send(res, 200, history);
     if (pathname === '/api/run' && req.method === 'POST') return send(res, 200, await runAndRecord());
     send(res, 404, { error: 'not found' });

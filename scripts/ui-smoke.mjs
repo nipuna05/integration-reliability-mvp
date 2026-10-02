@@ -84,6 +84,12 @@ async function main() {
   await run(`(() => { const s = document.querySelector('#draftList select[data-every="1"]'); s.value = '5m'; s.dispatchEvent(new Event('change')); })()`);
   check('choosing "every 5 minutes" writes it into the check', (await run(`JSON.parse(document.querySelector('#json').value)[1].every`)) === '5m');
 
+  // an incident must show up on the dashboard: break the demo sync, run, fix, run
+  await run(`fetch('/demo/break', { method: 'POST', body: JSON.stringify({ broken: true }) }).then(() => fetch('/api/run', { method: 'POST' })).then(() => fetch('/demo/break', { method: 'POST', body: JSON.stringify({ broken: false }) })).then(() => fetch('/api/run', { method: 'POST' }))`);
+  await waitFor(`document.querySelector('#incidents').innerText.includes('resolved')`, 'resolved incident on the dashboard', 15000);
+  check('dashboard lists a resolved incident with its cause', await run(`document.querySelector('#incidents').innerText.includes('Recent incidents') && document.querySelector('#incidents').innerText.includes('rounded down')`));
+  check('cards show uptime', await run(`[...document.querySelectorAll('#list .card')].some((c) => /uptime \\d+(\\.\\d)?%/.test(c.innerText))`));
+
   await click('#test');
   await waitFor(`document.querySelector('#editOut').innerText.includes('passed')`, 'test results');
   check('Test reports all four passing', (await text('#editOut')).startsWith('4 passed, 0 failed'));

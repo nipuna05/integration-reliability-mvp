@@ -138,3 +138,33 @@ test('server: test alert goes out by email, status endpoint shows masked address
     assert.match(Buffer.from(log.data.split('\n\n').slice(1).join('').replace(/\s/g, ''), 'base64').toString(), /Test alert/);
   } finally { p.kill(); server.close(); }
 });
+
+test('stats: a break and a fix produce an incident with a duration and lowered uptime; guests can read it', async () => {
+  const p = await startServer(3807, { APP_PASSWORD: 'pw123', PUBLIC_DEMO: '1' });
+  try {
+    const { json } = await call(3807, '/api/login', { method: 'POST', body: { password: 'pw123' } });
+    const h = { authorization: `Bearer ${json.token}` };
+    const checkId = (await call(3807, '/api/checks')).json[0].id;
+    await call(3807, '/api/run', { method: 'POST' });
+    await call(3807, '/demo/break', { method: 'POST', body: { broken: true } });
+    await call(3807, '/api/run', { method: 'POST' });
+    await call(3807, '/api/run', { method: 'POST' });
+    await new Promise((r) => setTimeout(r, 1100));
+    await call(3807, '/demo/break', { method: 'POST', body: { broken: false } });
+    await call(3807, '/api/run', { method: 'POST' });
+
+    const guest = await call(3807, '/api/stats'); // no login: public demo
+    assert.equal(guest.status, 200);
+    const s = guest.json;
+    assert.equal(s.incidents.length, 1, 'two failing runs in a row are ONE incident');
+    const i = s.incidents[0];
+    assert.equal(i.checkId, checkId);
+    assert.equal(i.ongoing, false);
+    assert.ok(i.durationSec >= 1);
+    assert.match(i.failure, /monthlySalary/);
+    assert.match(i.cause, /rounded down/);
+    const up = s.checks[checkId].uptime7d;
+    assert.equal(up.runs >= 4, true);
+    assert.equal(up.pct < 100 && up.pct > 0, true);
+  } finally { p.kill(); }
+});

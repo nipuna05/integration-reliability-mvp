@@ -87,6 +87,11 @@ Mark each as Pass, Fail or Unclear. Write down anything confusing. **Confusing i
 - [ ] Alert arrives on failure and again on recovery, and not repeatedly while it stays failing.
 - [ ] No API key appears anywhere (dashboard, history, alert text, browser network tab).
 
+**E2. Uptime and incidents**
+- [ ] A card shows "uptime NN% (7 days, N runs)" after a few runs.
+- [ ] Switch the demo bug on, run twice, fix it, run again: **Recent incidents** shows ONE incident (not two) that turns from ONGOING to resolved, with its duration and likely cause.
+- [ ] Reload the page and restart the server: the incident and uptime are still there.
+
 **F. Robustness**
 - [ ] Very slow API (timeout), API returning HTML instead of JSON, empty response.
 - [ ] Two browsers open at once. Refresh during a run.
@@ -103,3 +108,4 @@ Answer these honestly after a week of using it on something real:
 4. Would you tell another tester about it? Why or why not?
 
 If the answer to 1 is "no" on your own real work, the idea needs to change before more is built.
+

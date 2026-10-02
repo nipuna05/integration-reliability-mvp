@@ -48,3 +48,6 @@ Set `BREVO_API_KEY`, `ALERT_EMAIL_FROM` (a sender verified in Brevo) and `ALERT_
 
 ## Schedules
 Each check may set `"every": "30s" | "5m" | "1h" | "1d"` (editor: the **Runs** menu on each row). Checks without it use `INTERVAL_SEC` (default 60). Shortest allowed: 30s (`MIN_INTERVAL_SEC`). History is kept per check (last 100 runs each), so a frequent check cannot push out a rare one.
+
+## Uptime and incidents
+Every run is counted per day (kept 35 days). Cards show uptime for the last 7 days; **Recent incidents** lists each outage: when it started, how long it lasted (or that it is ongoing), the failing step and the likely cause. Guests can read it on the public demo. Data is in `data/stats.json`. Endpoint: `GET /api/stats`.
