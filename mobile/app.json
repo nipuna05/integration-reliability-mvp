@@ -2,6 +2,12 @@
   "expo": {
     "name": "Integration Reliability",
     "slug": "integration-reliability",
+    "owner": "kalbaappss-team",
+    "extra": {
+      "eas": {
+        "projectId": "a6d1a6ac-54df-4dd5-981f-762460ae7b82"
+      }
+    },
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
