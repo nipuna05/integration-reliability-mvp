@@ -186,3 +186,34 @@ test('weekly report: signed-in users can send it by email now; guests cannot', a
     assert.match(body, /Uptime \(last 7 days\)/);
   } finally { p.kill(); server.close(); }
 });
+
+test('public status page: off by default; when on, readable by anyone, shows outage, leaks nothing, respects "public": false', async () => {
+  const off = await startServer(3809, { APP_PASSWORD: 'pw123' });
+  const on = await startServer(3810, { APP_PASSWORD: 'pw123', STATUS_PAGE: '1', STATUS_TITLE: 'Acme status' });
+  try {
+    assert.equal((await fetch('http://localhost:3809/status')).status, 404);
+    assert.equal((await call(3809, '/api/public-status')).status, 404);
+
+    const page = await fetch('http://localhost:3810/status');
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /Service status/);
+
+    const { json } = await call(3810, '/api/login', { method: 'POST', body: { password: 'pw123' } });
+    const h = { authorization: `Bearer ${json.token}` };
+    const secretCheck = { id: 'internal', name: 'Hidden check', public: false, steps: [{ name: 's', url: '{{base}}/demo/secure/ping', headers: { authorization: 'Bearer demo-key-123' }, expect: { status: 200 } }] };
+    const shown = { id: 'hr', name: 'Payroll sync', steps: [{ name: 'Check salary', url: '{{base}}/demo/hr/employees/E999', expect: { status: 200 } }] };
+    assert.equal((await call(3810, '/api/checks', { method: 'PUT', headers: h, body: [shown, secretCheck] })).status, 200);
+    await call(3810, '/api/run', { method: 'POST', headers: h });
+
+    const pub = await call(3810, '/api/public-status'); // no login at all
+    assert.equal(pub.status, 200);
+    assert.equal(pub.json.title, 'Acme status');
+    assert.deepEqual(pub.json.checks.map((c) => c.name), ['Payroll sync']);
+    assert.equal(pub.json.checks[0].status, 'failing');
+    assert.equal(pub.json.overall, 'outage');
+    const text = JSON.stringify(pub.json);
+    for (const leak of ['demo-key-123', 'E999', '/demo/', 'Hidden check', 'expected status', '404']) assert.equal(text.includes(leak), false, `leaked: ${leak}`);
+    assert.equal((await call(3810, '/api/session', { headers: h })).json.statusPage, true);
+    assert.equal((await call(3810, '/api/checks', { method: 'PUT', headers: h, body: [{ ...shown, public: 'yes' }] })).status, 400);
+  } finally { off.kill(); on.kill(); }
+});

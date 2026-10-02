@@ -55,7 +55,7 @@
   <div id="app">
     <div id="list"></div>
     <div id="incidents"></div>
-    <div class="bar"><button id="editToggle" class="hidden">Add or change checks</button><button id="logout" class="hidden">Sign out</button><span class="muted" id="editNote" style="align-self:center"></span></div>
+    <div class="bar"><button id="editToggle" class="hidden">Add or change checks</button><button id="logout" class="hidden">Sign out</button><a id="statusLink" href="/status" target="_blank" rel="noopener" class="hidden" style="align-self:center">Public status page ↗</a><span class="muted" id="editNote" style="align-self:center"></span></div>
 
     <div id="editor" class="card hidden">
       <h2>Add or change checks</h2>
@@ -168,6 +168,7 @@ async function boot() {
   $('fix').classList.toggle('hidden', locked);
   $('editToggle').classList.toggle('hidden', locked || !session.canEdit);
   $('logout').classList.toggle('hidden', !session.authRequired || !session.authed);
+  $('statusLink').classList.toggle('hidden', !session.statusPage || locked);
   $('editNote').textContent = signinOffered ? 'Viewing as guest. Sign in above to edit checks.' : (!locked && !session.canEdit ? 'Editing is off here (set APP_PASSWORD on the server to enable it).' : '');
   if (!locked) render().catch(() => {});
 }
@@ -202,8 +203,13 @@ function renderDraft() {
   const list = draft();
   if (!list) { $('draftList').innerHTML = '<div class="fail">The JSON has a mistake, so the list cannot be shown. Open "Advanced" below to fix it.</div>'; return; }
   $('draftList').innerHTML = list.length
-    ? list.map((c, i) => `<div class="chk"><div><strong>${esc(c.name || c.id || '(unnamed)')}</strong> <span class="muted">· ${(c.steps || []).length} step(s)</span></div><div><span class="muted">Runs </span><select data-every="${i}">${everyOptions(c.every)}</select> <button class="link" data-rm="${i}">Remove</button></div></div>`).join('')
+    ? list.map((c, i) => `<div class="chk"><div><strong>${esc(c.name || c.id || '(unnamed)')}</strong> <span class="muted">· ${(c.steps || []).length} step(s)</span></div><div><span class="muted">Runs </span><select data-every="${i}">${everyOptions(c.every)}</select> ${session.statusPage ? `<label class="muted" title="Show this check on the public status page"><input type="checkbox" data-pub="${i}"${c.public === false ? '' : ' checked'}> public</label> ` : ''}<button class="link" data-rm="${i}">Remove</button></div></div>`).join('')
     : '<div class="muted">No checks yet. Add one above.</div>';
+  $('draftList').querySelectorAll('[data-pub]').forEach((b) => b.onchange = () => {
+    const l = draft(); const c = l[+b.dataset.pub];
+    if (b.checked) delete c.public; else c.public = false;
+    $('json').value = JSON.stringify(l, null, 2); setDirty(true);
+  });
   $('draftList').querySelectorAll('[data-every]').forEach((s) => s.onchange = () => {
     const l = draft(); const c = l[+s.dataset.every];
     if (s.value) c.every = s.value; else delete c.every;

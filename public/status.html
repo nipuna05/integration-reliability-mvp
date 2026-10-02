@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Service status</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2430; --muted:#6b7686; --ok:#1a7f4b; --warn:#b26a00; --bad:#c62828; --line:#e3e6eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12161c; --card:#1b212a; --text:#e6e9ee; --muted:#8c96a5; --ok:#4cc38a; --warn:#f0b34a; --bad:#ff6b6b; --line:#2a323d; } }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:28px 16px; }
+  h1 { font-size:22px; margin:0 0 16px; } h2 { font-size:16px; margin:24px 0 8px; }
+  .banner { border-radius:12px; padding:16px 18px; font-size:18px; font-weight:600; color:#fff; }
+  .banner.operational { background:var(--ok); } .banner.degraded { background:var(--warn); } .banner.outage { background:var(--bad); } .banner.unknown { background:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px 16px; margin-top:12px; }
+  .row { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px; background:var(--muted); }
+  .dot.operational { background:var(--ok); } .dot.failing { background:var(--bad); }
+  .muted { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">Service status</h1>
+  <div id="banner" class="banner unknown">Loading…</div>
+  <div class="card" id="checks"></div>
+  <h2>Incidents, last 14 days</h2>
+  <div class="card" id="incidents"></div>
+  <p class="muted" id="updated"></p>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const WORDS = { operational: 'All systems operational', degraded: 'Partial outage', outage: 'Major outage', unknown: 'Status not available yet' };
+const fmtDur = (s) => (s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)} min` : s < 86400 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.floor(s / 86400)} d`);
+
+async function load() {
+  try {
+    const r = await fetch('/api/public-status', { cache: 'no-store' });
+    if (!r.ok) throw new Error(String(r.status));
+    const d = await r.json();
+    document.title = d.title;
+    $('title').textContent = d.title;
+    $('banner').className = `banner ${d.overall}`;
+    $('banner').textContent = WORDS[d.overall];
+    $('checks').innerHTML = d.checks.length
+      ? d.checks.map((c) => `<div class="row"><span><span class="dot ${c.status}"></span>${esc(c.name)}</span><span class="muted">${c.status === 'failing' ? 'Not working' : c.status === 'unknown' ? 'No data yet' : 'Operational'}${c.uptime7d === null ? '' : ` · ${c.uptime7d}% uptime (7 days)`}</span></div>`).join('')
+      : '<div class="row muted">Nothing is being monitored yet.</div>';
+    $('incidents').innerHTML = d.incidents.length
+      ? d.incidents.map((i) => `<div class="row"><span>${esc(i.name)}<br><span class="muted">${new Date(i.startedAt).toLocaleString()}</span></span><span class="${i.ongoing ? '' : 'muted'}" style="${i.ongoing ? 'color:var(--bad);font-weight:600' : ''}">${i.ongoing ? `Ongoing, ${fmtDur(i.durationSec)}` : `Resolved after ${fmtDur(i.durationSec)}`}</span></div>`).join('')
+      : '<div class="row muted">No incidents in the last 14 days.</div>';
+    $('updated').textContent = `Updated ${new Date(d.updatedAt).toLocaleTimeString()}. This page refreshes itself every 30 seconds.`;
+  } catch {
+    $('banner').className = 'banner unknown';
+    $('banner').textContent = 'Could not load the status. Retrying…';
+  }
+}
+load(); setInterval(load, 30000);
+</script>
+</body>
+</html>

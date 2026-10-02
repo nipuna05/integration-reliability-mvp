@@ -54,3 +54,6 @@ Every run is counted per day (kept 35 days). Cards show uptime for the last 7 da
 
 ## Weekly report
 Set `WEEKLY_DIGEST=1` to email (and post to the chat webhook) a plain-text reliability report every 7 days: uptime per check and every incident of the week with duration and likely cause. The first one is sent 7 days after switching it on. **Alerts -> Send the weekly report now** sends one immediately.
+
+## Public status page
+Set `STATUS_PAGE=1` (and optionally `STATUS_TITLE`) to publish `/status` to anyone with the link, no login. It shows only check names, up/down, 7-day uptime and incident times (last 14 days). It never shows URLs, errors, steps, causes or keys. Set `"public": false` on a check (or untick **public** in the editor) to hide it. Off by default.

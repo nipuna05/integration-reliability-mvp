@@ -7,6 +7,7 @@ import { runAll, runCheck } from './lib/runner.js';
 import { handleDemo } from './lib/demo.js';
 import { detectTransitions, dispatch, sendTestAlert, sendWebhook } from './lib/alerts.js';
 import { buildDigest } from './lib/digest.js';
+import { buildPublicStatus } from './lib/publicStatus.js';
 import { createMailer } from './lib/mailer.js';
 import { validateChecks } from './lib/checks.js';
 import { createAuth, viaProxy } from './lib/auth.js';
@@ -34,7 +35,10 @@ let checks = JSON.parse(await readFile(existsSync(CHECKS_FILE) ? CHECKS_FILE : p
 let history = existsSync(HISTORY_FILE) ? JSON.parse(await readFile(HISTORY_FILE, 'utf8')) : [];
 const STATS_FILE = path.join(DATA_DIR, 'stats.json');
 const stats = createStats(existsSync(STATS_FILE) ? JSON.parse(await readFile(STATS_FILE, 'utf8')) : undefined);
-const DIGEST_FILE = path.join(DATA_DIR, 'digest.json');
+// STATUS_PAGE=1 publishes /status for anyone with the link (names, up/down, uptime only). Off by default.
+const STATUS_PAGE = process.env.STATUS_PAGE === '1';
+const STATUS_TITLE = process.env.STATUS_TITLE || 'Service status';
+const DIGEST_FILE =path.join(DATA_DIR, 'digest.json');
 const WEEKLY_DIGEST = process.env.WEEKLY_DIGEST === '1';
 let lastDigestAt = existsSync(DIGEST_FILE) ? JSON.parse(await readFile(DIGEST_FILE, 'utf8')).lastSentAt : undefined;
 const secrets = await createSecretStore(path.join(DATA_DIR, 'secrets.json'), process.env.SECRETS_KEY);
@@ -108,9 +112,14 @@ const server = http.createServer(async (req, res) => {
   try {
     if (pathname.startsWith('/demo/')) return await handleDemo(req, res, pathname);
     if (pathname === '/healthz') return send(res, 200, { ok: true });
+    if (pathname === '/status' || pathname === '/api/public-status') {
+      if (!STATUS_PAGE) return send(res, 404, { error: 'not found' });
+      if (pathname === '/status') return send(res, 200, await readFile(path.join(root, 'public', 'status.html'), 'utf8'), 'text/html', { 'cache-control': 'no-store' });
+      return send(res, 200, buildPublicStatus({ checks, summary: stats.summary(checks.map((c) => c.id)), lastStatus, title: STATUS_TITLE }), 'application/json', { 'cache-control': 'no-store' });
+    }
     if (pathname === '/') return send(res, 200, await readFile(path.join(root, 'public', 'index.html'), 'utf8'), 'text/html', { 'cache-control': 'no-store' });
 
-    if (pathname === '/api/session') return send(res, 200, { authRequired: auth.enabled, authed: auth.isAuthed(req), canEdit: canEdit(req), publicRead: PUBLIC_DEMO, defaultIntervalSec: intervalSec, minIntervalSec: MIN_INTERVAL_SEC });
+    if (pathname === '/api/session') return send(res, 200, { authRequired: auth.enabled, authed: auth.isAuthed(req), canEdit: canEdit(req), publicRead: PUBLIC_DEMO, statusPage: STATUS_PAGE, defaultIntervalSec: intervalSec, minIntervalSec: MIN_INTERVAL_SEC });
     if (pathname === '/api/login' && req.method === 'POST') {
       const token = auth.login((await readJson(req)).password, ip);
       if (token === 'RATE_LIMITED') return send(res, 429, { error: 'too many attempts, wait a minute' });
