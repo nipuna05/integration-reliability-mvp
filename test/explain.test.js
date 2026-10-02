@@ -50,3 +50,13 @@ test('if the AI call fails, the rules still explain it', async () => {
   assert.equal(a.source, 'rules');
   assert.match(a.text, /API key or token/);
 });
+
+test('single-step checks never talk about two systems syncing', () => {
+  const one = (failures) => ({ id: 'c', name: 'C', failedStep: 'Call API', failures, steps: [{ name: 'Call API', ok: false }] });
+  const num = explainByRules(one(['userId: expected "2", got 1']));
+  assert.match(num, /check expects/);
+  assert.doesNotMatch(num, /two systems|sync|receiving system/);
+  assert.doesNotMatch(explainByRules(one(['name: expected "A", got "B"'])), /two systems|between the systems/);
+  assert.doesNotMatch(explainByRules(one(['expected status 200, got 404'])), /sync|earlier step/);
+  assert.match(explainByRules(one(['x: expected 125750, got 125000'])), /API is probably truncating/);
+});
