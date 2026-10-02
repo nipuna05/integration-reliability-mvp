@@ -20,3 +20,7 @@ See docs/ for the product brief, roadmap, interview guide and Play Store checkli
 ## Alerts
 Set ALERT_WEBHOOK_URL to a Teams, Slack or Discord incoming-webhook URL. A message is sent when a check starts failing and when it recovers (not on every failing run).
     $env:ALERT_WEBHOOK_URL='https://...'; npm start
+
+## Login and editing checks
+Set APP_PASSWORD to require a login for the API/dashboard and to enable the check editor (dashboard -> Edit checks). Without a password, reading is open but editing only works from the same PC, never through a tunnel/proxy. Edited checks are stored in data/checks.json (override the folder with DATA_DIR).
+    $env:APP_PASSWORD='choose-one'; npm start

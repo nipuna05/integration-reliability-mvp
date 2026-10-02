@@ -21,6 +21,9 @@
   .steps li { padding:2px 0; } .fail { color:var(--bad); }
   .muted { color:var(--muted); font-size:13px; }
   .spark { display:flex; gap:3px; margin-top:10px; } .spark i { width:10px; height:18px; border-radius:2px; background:var(--ok); } .spark i.bad { background:var(--bad); }
+  textarea { width:100%; box-sizing:border-box; min-height:280px; font:13px/1.4 ui-monospace,Consolas,monospace; background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:10px; }
+  input[type=password] { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; }
+  .hidden { display:none; } pre.out { white-space:pre-wrap; font-size:13px; margin:10px 0 0; }
 </style>
 </head>
 <body>
@@ -33,14 +36,36 @@
     <button id="fix">Fix sync</button>
     <span class="muted" id="state" style="align-self:center"></span>
   </div>
-  <div id="list"></div>
+  <div id="login" class="card hidden">
+    <strong>Sign in</strong>
+    <div class="bar" style="margin:10px 0 0"><input type="password" id="pw" placeholder="Password"><button class="primary" id="signin">Sign in</button></div>
+    <div class="fail" id="loginErr"></div>
+  </div>
+  <div id="app">
+    <div id="list"></div>
+    <div class="bar"><button id="editToggle" class="hidden">Edit checks</button><button id="logout" class="hidden">Sign out</button><span class="muted" id="editNote" style="align-self:center"></span></div>
+    <div id="editor" class="card hidden">
+      <strong>Edit checks (JSON)</strong>
+      <p class="muted">Each check has steps (url, method, body, expect, extract). Use {{base}}, {{runId}} and extracted variables in URLs/bodies. "Test" runs without saving or recording.</p>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div class="bar" style="margin:10px 0 0"><button id="test">Test</button><button class="primary" id="save">Save</button></div>
+      <pre class="out" id="editOut"></pre>
+    </div>
+  </div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+let session = {};
+const api = async (url, opts) => {
+  const r = await fetch(url, opts);
+  if (r.status === 401) { await boot(); throw new Error('login required'); }
+  return r;
+};
+
 async function render() {
-  const [checks, history, demo] = await Promise.all(['/api/checks', '/api/history', '/demo/state'].map((u) => fetch(u).then((r) => r.json())));
+  const [checks, history, demo] = await Promise.all(['/api/checks', '/api/history', '/demo/state'].map((u) => api(u).then((r) => r.json())));
   $('state').textContent = demo.broken ? 'Demo sync: BROKEN' : 'Demo sync: healthy';
   $('list').innerHTML = checks.map((c) => {
     const runs = history.filter((h) => h.id === c.id);
@@ -55,11 +80,59 @@ async function render() {
   }).join('');
 }
 
-$('run').onclick = async () => { $('run').disabled = true; await fetch('/api/run', { method: 'POST' }); $('run').disabled = false; render(); };
-const setBroken = (broken) => async () => { await fetch('/demo/break', { method: 'POST', body: JSON.stringify({ broken }) }); render(); };
+async function boot() {
+  session = await fetch('/api/session').then((r) => r.json());
+  const locked = session.authRequired && !session.authed;
+  $('login').classList.toggle('hidden', !locked);
+  $('app').classList.toggle('hidden', locked);
+  $('run').classList.toggle('hidden', locked);
+  $('break').classList.toggle('hidden', locked);
+  $('fix').classList.toggle('hidden', locked);
+  $('editToggle').classList.toggle('hidden', locked || !session.canEdit);
+  $('logout').classList.toggle('hidden', !session.authRequired || locked);
+  $('editNote').textContent = !locked && !session.canEdit ? 'Editing is off here (set APP_PASSWORD on the server to enable it).' : '';
+  if (!locked) render().catch(() => {});
+}
+
+$('signin').onclick = async () => {
+  const r = await fetch('/api/login', { method: 'POST', body: JSON.stringify({ password: $('pw').value }) });
+  $('loginErr').textContent = r.ok ? '' : (await r.json()).error;
+  $('pw').value = '';
+  if (r.ok) boot();
+};
+$('pw').onkeydown = (e) => { if (e.key === 'Enter') $('signin').click(); };
+$('logout').onclick = async () => { await fetch('/api/logout', { method: 'POST' }); boot(); };
+
+$('editToggle').onclick = async () => {
+  const open = $('editor').classList.toggle('hidden') === false;
+  if (open) $('json').value = JSON.stringify(await (await api('/api/checks')).json(), null, 2);
+};
+const editorCall = async (url, method) => {
+  let body;
+  try { body = JSON.parse($('json').value); } catch (e) { $('editOut').textContent = 'Not valid JSON: ' + e.message; return null; }
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) { $('editOut').textContent = (data.errors || [data.error]).join('
+'); return null; }
+  return data;
+};
+$('test').onclick = async () => {
+  $('editOut').textContent = 'Running…';
+  const results = await editorCall('/api/checks/test', 'POST');
+  if (results) $('editOut').textContent = results.map((r) => `${r.ok ? 'PASS' : 'FAIL'}  ${r.name}` + (r.ok ? '' : `
+   ${r.failedStep}: ${r.failures.join('; ')}`)).join('
+');
+};
+$('save').onclick = async () => {
+  const data = await editorCall('/api/checks', 'PUT');
+  if (data) { $('editOut').textContent = `Saved ${data.saved} check(s). Click "Run checks now" to run them.`; render(); }
+};
+
+$('run').onclick = async () => { $('run').disabled = true; await api('/api/run', { method: 'POST' }).catch(() => {}); $('run').disabled = false; render().catch(() => {}); };
+const setBroken = (broken) => async () => { await fetch('/demo/break', { method: 'POST', body: JSON.stringify({ broken }) }); render().catch(() => {}); };
 $('break').onclick = setBroken(true);
 $('fix').onclick = setBroken(false);
-render(); setInterval(render, 10000);
+boot(); setInterval(() => { if (!$('app').classList.contains('hidden')) render().catch(() => {}); }, 10000);
 </script>
 </body>
 </html>
