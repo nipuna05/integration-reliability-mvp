@@ -42,3 +42,6 @@ Set these (e.g. in `.demo.env`, which git ignores): `SMTP_HOST`, `SMTP_PORT` (46
 
 ### Email through Brevo (when SMTP ports are blocked)
 Set `BREVO_API_KEY`, `ALERT_EMAIL_FROM` (a sender verified in Brevo) and `ALERT_EMAIL_TO`. Brevo is used instead of SMTP when its key is set. It uses HTTPS (port 443), so it works on networks that block mail ports.
+
+## UI smoke test
+`npm run test:ui` drives the dashboard in a real headless Microsoft Edge (sign in, curl import, template, test, save, remove) and fails on any page error. Needs Edge installed.

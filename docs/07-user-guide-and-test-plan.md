@@ -29,19 +29,19 @@ That is the whole idea. The rest of the app is about doing the same thing on *yo
 
 ## 3. Using it on your own API (about 3 minutes)
 
-Sign in first (the password is in the project's `.demo.env` file). Then click **Edit checks**.
+Sign in first (the password is in the project's `.demo.env` file). Then click **Add or change checks**. The editor has three steps: **1 Add a check**, **2 Your checks** (Test and Save), and collapsed sections for Secrets, Alerts and Advanced JSON.
 
 **Fastest way: import from curl**
 1. Take any curl command for an API you use (API docs, Postman "Code snippet", or browser DevTools, Network tab, right-click, Copy as cURL).
-2. Paste it into **Import from curl** and click **Import**.
+2. In step 1, stay on the **Paste a curl command** tab, paste it, and click **Try it**.
 3. The app calls the API once and shows the status it got. Any API key in the command is **moved into Secrets automatically**, so it is never visible in the check.
-4. Tick the response values that must always stay the same (not times or IDs), then click **Add to editor**.
-5. Click **Test** (runs it once, nothing saved) then **Save**.
+4. Tick the response values that must always stay the same (not times or IDs), then click **Add this check**. It appears in the **Your checks** list.
+5. Click **Test them** (runs everything once, nothing saved) then **Save**. A "● unsaved changes" note shows until you save.
 
 A public API to practice with: `curl https://jsonplaceholder.typicode.com/todos/1` (tick `userId`, `id`).
 
 **Other ways to create a check**
-- **Add from template**: pick HR to Payroll, CRM to Billing, Webhook delivered, or API returns expected value, fill in the URLs.
+- **Start from a template** (the second tab in step 1): pick HR to Payroll, CRM to Billing, Webhook delivered, or API returns expected value, fill in the URLs.
 - **Edit the JSON** by hand for multi-step stories.
 
 **Secrets**: save an API key once under Secrets, then use `{{secret.NAME}}` in a header. The value is never shown again and is masked as `***` in results and alerts.
@@ -67,7 +67,7 @@ Mark each as Pass, Fail or Unclear. Write down anything confusing. **Confusing i
 
 **B. Login and access**
 - [ ] Wrong password is rejected; the right one works; Sign out works.
-- [ ] As a guest (not signed in) you can view and run checks, but cannot see Edit checks.
+- [ ] As a guest (not signed in) you can view and run checks, but cannot see "Add or change checks".
 - [ ] Ten wrong passwords in a minute gives "too many attempts".
 
 **C. Curl import**

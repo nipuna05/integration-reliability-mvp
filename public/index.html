@@ -5,14 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Integration Reliability</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2430; --muted:#6b7686; --ok:#1a7f4b; --bad:#c62828; --line:#e3e6eb; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#12161c; --card:#1b212a; --text:#e6e9ee; --muted:#8c96a5; --ok:#4cc38a; --bad:#ff6b6b; --line:#2a323d; } }
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2430; --muted:#6b7686; --ok:#1a7f4b; --bad:#c62828; --line:#e3e6eb; --accent:#3b5bdb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12161c; --card:#1b212a; --text:#e6e9ee; --muted:#8c96a5; --ok:#4cc38a; --bad:#ff6b6b; --line:#2a323d; --accent:#8da2fb; } }
   body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; }
   main { max-width:860px; margin:0 auto; padding:24px 16px; }
-  h1 { font-size:22px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 20px; }
+  h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:17px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 20px; }
   .bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
   button { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 14px; cursor:pointer; font:inherit; }
   button.primary { background:var(--text); color:var(--bg); }
+  button.tab { border-radius:99px; } button.tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.link { border:0; background:none; color:var(--accent); padding:0 4px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
   .row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
   .pill { font-weight:600; font-size:13px; padding:2px 10px; border-radius:99px; }
@@ -22,11 +24,16 @@
   .muted { color:var(--muted); font-size:13px; }
   .spark { display:flex; gap:3px; margin-top:10px; } .spark i { width:10px; height:18px; border-radius:2px; background:var(--ok); } .spark i.bad { background:var(--bad); }
   textarea { width:100%; box-sizing:border-box; min-height:280px; font:13px/1.4 ui-monospace,Consolas,monospace; background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:10px; }
-  input[type=password] { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; }
-  select, input.tp { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; max-width:100%; }
+  input[type=password], select, input.tp { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; max-width:100%; }
   .tprow { display:flex; flex-direction:column; gap:2px; margin:8px 0; } .tprow input { width:100%; box-sizing:border-box; }
   .why { margin-top:10px; padding:10px 12px; border-left:3px solid var(--bad); background:var(--bg); border-radius:6px; font-size:14px; }
   .hidden { display:none; } pre.out { white-space:pre-wrap; font-size:13px; margin:10px 0 0; }
+  .stepno { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background:var(--accent); color:#fff; font-size:13px; font-weight:600; margin-right:8px; }
+  .section { margin-top:18px; } .section > .head { display:flex; align-items:center; margin-bottom:6px; font-weight:600; }
+  .chk { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; }
+  details { border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-top:10px; }
+  summary { cursor:pointer; font-weight:600; }
+  code { background:var(--bg); padding:1px 5px; border-radius:4px; }
 </style>
 </head>
 <body>
@@ -46,41 +53,63 @@
   </div>
   <div id="app">
     <div id="list"></div>
-    <div class="bar"><button id="editToggle" class="hidden">Edit checks</button><button id="logout" class="hidden">Sign out</button><span class="muted" id="editNote" style="align-self:center"></span></div>
+    <div class="bar"><button id="editToggle" class="hidden">Add or change checks</button><button id="logout" class="hidden">Sign out</button><span class="muted" id="editNote" style="align-self:center"></span></div>
+
     <div id="editor" class="card hidden">
-      <div class="card" style="background:transparent">
-        <strong>Import from curl (fastest way to start)</strong>
-        <p class="muted">Paste a curl command for an API you already use (from its docs, Postman or the browser's Network tab, "Copy as cURL"). The app calls it once, shows the result, hides any API key as a secret, and builds the check.</p>
-        <textarea id="curlCmd" spellcheck="false" style="min-height:90px" placeholder="curl https://api.example.com/status -H 'Authorization: Bearer ...'"></textarea>
-        <div class="bar" style="margin:10px 0 0"><button id="curlGo">Import</button><button id="curlAdd" class="primary hidden">Add to editor</button></div>
-        <div id="curlOut" class="muted"></div>
-        <div id="curlFields"></div>
+      <h2>Add or change checks</h2>
+      <p class="muted">A check is a small test that runs every minute and alerts you when it stops passing. Three steps: add, test, save.</p>
+
+      <div class="section">
+        <div class="head"><span class="stepno">1</span>Add a check</div>
+        <div class="bar" style="margin:0 0 10px">
+          <button class="tab active" id="tabCurl">Paste a curl command</button>
+          <button class="tab" id="tabTpl">Start from a template</button>
+        </div>
+
+        <div id="paneCurl">
+          <p class="muted">Paste a curl command for an API you already use (API docs, Postman, or the browser's Network tab → "Copy as cURL"). The app calls it once, shows what came back, hides any API key as a secret, and builds the check.</p>
+          <textarea id="curlCmd" spellcheck="false" style="min-height:90px" placeholder="curl https://api.example.com/status -H 'Authorization: Bearer ...'"></textarea>
+          <div class="bar" style="margin:10px 0 0"><button id="curlGo">Try it</button><button id="curlAdd" class="primary hidden">Add this check</button></div>
+          <div id="curlOut" class="muted"></div>
+          <div id="curlFields"></div>
+        </div>
+
+        <div id="paneTpl" class="hidden">
+          <div class="bar" style="margin:0"><select id="tplSel"></select></div>
+          <div class="muted" id="tplDesc"></div>
+          <div id="tplParams"></div>
+          <div class="bar" style="margin:10px 0 0"><button id="tplAdd" class="primary">Add this check</button></div>
+        </div>
       </div>
-      <strong>Edit checks (JSON)</strong>
-      <p class="muted">Each check has steps (url, method, body, expect, extract). Use {{base}}, {{runId}} and extracted variables in URLs/bodies. "Test" runs without saving or recording.</p>
-      <div class="card" style="background:transparent">
-        <strong>Add from template</strong>
-        <div class="bar" style="margin:10px 0 0"><select id="tplSel"></select></div>
-        <div class="muted" id="tplDesc"></div>
-        <div id="tplParams"></div>
-        <div class="bar" style="margin:10px 0 0"><button id="tplAdd">Add to editor</button></div>
+
+      <div class="section">
+        <div class="head"><span class="stepno">2</span>Your checks <span class="muted" id="dirty" style="margin-left:8px"></span></div>
+        <div id="draftList"></div>
+        <div class="bar" style="margin:10px 0 0"><button id="test">Test them</button><button class="primary" id="save">Save</button></div>
+        <pre class="out" id="editOut"></pre>
+        <div class="muted"><span class="stepno" style="width:18px;height:18px;line-height:18px;font-size:11px">3</span>"Test them" runs everything once and saves nothing. "Save" keeps the list and starts running it every minute.</div>
       </div>
-      <div class="card" style="background:transparent">
-        <strong>Secrets (API keys)</strong>
-        <p class="muted">Stored on the server only; values are never shown again. Use in a check as <code>{{secret.NAME}}</code>, e.g. <code>"headers": { "authorization": "Bearer {{secret.PAYROLL_TOKEN}}" }</code>. <span id="secEnc"></span></p>
+
+      <details>
+        <summary>Secrets (API keys)</summary>
+        <p class="muted">Stored on the server only; values are never shown again. Use in a check as <code>{{secret.NAME}}</code>, for example <code>"headers": { "authorization": "Bearer {{secret.PAYROLL_TOKEN}}" }</code>. Pasting a curl command with a key creates the secret for you. <span id="secEnc"></span></p>
         <div id="secList" class="muted"></div>
         <div class="bar" style="margin:10px 0 0"><input class="tp" id="secName" placeholder="NAME_LIKE_THIS" style="width:200px"><input type="password" id="secVal" placeholder="value"><button id="secSave">Save secret</button></div>
         <div class="fail" id="secErr"></div>
-      </div>
-      <div class="card" style="background:transparent">
-        <strong>Alerts</strong>
+      </details>
+
+      <details>
+        <summary>Alerts</summary>
         <p class="muted" id="alertInfo">Loading…</p>
         <div class="bar" style="margin:10px 0 0"><button id="alertTest">Send test alert</button></div>
         <pre class="out" id="alertOut"></pre>
-      </div>
-      <textarea id="json" spellcheck="false"></textarea>
-      <div class="bar" style="margin:10px 0 0"><button id="test">Test</button><button class="primary" id="save">Save</button></div>
-      <pre class="out" id="editOut"></pre>
+      </details>
+
+      <details>
+        <summary>Advanced: edit the checks as JSON</summary>
+        <p class="muted">For multi-step checks. Each step has url, method, headers, body, expect and extract. Use <code>{{base}}</code>, <code>{{runId}}</code> and extracted variables in URLs and bodies.</p>
+        <textarea id="json" spellcheck="false"></textarea>
+      </details>
     </div>
   </div>
 </main>
@@ -136,6 +165,43 @@ $('signin').onclick = async () => {
 $('pw').onkeydown = (e) => { if (e.key === 'Enter') $('signin').click(); };
 $('logout').onclick = async () => { await fetch('/api/logout', { method: 'POST' }); boot(); };
 
+// ---- the list of checks being edited (the textarea holds the data; this shows it readably) ----
+let dirty = false;
+function setDirty(v) { dirty = v; $('dirty').textContent = v ? '● unsaved changes' : ''; }
+function draft() { try { const l = JSON.parse($('json').value); return Array.isArray(l) ? l : null; } catch { return null; } }
+function renderDraft() {
+  const list = draft();
+  if (!list) { $('draftList').innerHTML = '<div class="fail">The JSON has a mistake, so the list cannot be shown. Open "Advanced" below to fix it.</div>'; return; }
+  $('draftList').innerHTML = list.length
+    ? list.map((c, i) => `<div class="chk"><div><strong>${esc(c.name || c.id || '(unnamed)')}</strong> <span class="muted">· ${(c.steps || []).length} step(s)</span></div><button class="link" data-rm="${i}">Remove</button></div>`).join('')
+    : '<div class="muted">No checks yet. Add one above.</div>';
+  $('draftList').querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => {
+    const l = draft(); l.splice(+b.dataset.rm, 1);
+    $('json').value = JSON.stringify(l, null, 2); setDirty(true); renderDraft();
+  });
+}
+$('json').oninput = () => { setDirty(true); renderDraft(); };
+function addToDraft(check, out) {
+  const list = draft();
+  if (!list) { out.textContent = 'The JSON has a mistake. Open "Advanced" below and fix it first.'; return false; }
+  uniqueCheck(list, check);
+  list.push(check);
+  $('json').value = JSON.stringify(list, null, 2);
+  setDirty(true); renderDraft();
+  return true;
+}
+
+// ---- tabs ----
+function setTab(which) {
+  $('tabCurl').classList.toggle('active', which === 'curl');
+  $('tabTpl').classList.toggle('active', which === 'tpl');
+  $('paneCurl').classList.toggle('hidden', which !== 'curl');
+  $('paneTpl').classList.toggle('hidden', which !== 'tpl');
+}
+$('tabCurl').onclick = () => setTab('curl');
+$('tabTpl').onclick = () => setTab('tpl');
+
+// ---- secrets ----
 async function loadSecrets() {
   const { names, encrypted } = await (await api('/api/secrets')).json();
   $('secEnc').textContent = encrypted ? 'Encrypted at rest.' : 'Not encrypted at rest: set SECRETS_KEY on the server to encrypt.';
@@ -154,6 +220,7 @@ $('secSave').onclick = async () => {
   if (r.ok) { $('secName').value = ''; $('secVal').value = ''; loadSecrets(); }
 };
 
+// ---- alerts ----
 async function loadAlerts() {
   const a = await (await api('/api/alerts')).json();
   const parts = [a.webhook ? 'Chat webhook: on' : 'Chat webhook: off (set ALERT_WEBHOOK_URL)', a.email.enabled ? `Email: on, sending to ${a.email.to.join(', ')}` : 'Email: off (set BREVO_API_KEY + ALERT_EMAIL_FROM + ALERT_EMAIL_TO, or SMTP_HOST + ALERT_EMAIL_TO)'];
@@ -166,6 +233,7 @@ $('alertTest').onclick = async () => {
   $('alertOut').textContent = r.ok ? `Chat webhook: ${d.webhook}\nEmail: ${d.email}` : d.error;
 };
 
+// ---- add from curl ----
 let curlImport = null;
 $('curlGo').onclick = async () => {
   $('curlOut').textContent = 'Working…'; $('curlFields').innerHTML = ''; $('curlAdd').classList.add('hidden');
@@ -183,15 +251,13 @@ $('curlAdd').onclick = () => {
   const check = curlImport.check;
   const picked = [...document.querySelectorAll('#curlFields input:checked')].map((i) => curlImport.preview.fields[+i.dataset.i]);
   if (picked.length) check.steps[0].expect.json = Object.fromEntries(picked.map((f) => [f.path, f.value]));
-  let list;
-  try { list = JSON.parse($('json').value); } catch { $('curlOut').textContent = 'Fix the JSON in the editor first.'; return; }
-  uniqueCheck(list, check);
-  list.push(check);
-  $('json').value = JSON.stringify(list, null, 2);
-  $('curlOut').textContent = 'Added to the editor below. Click Test, then Save.';
+  if (!addToDraft(check, $('curlOut'))) return;
+  $('curlOut').textContent = `Added "${check.name}". Now click "Test them", then "Save".`;
+  $('curlFields').innerHTML = '';
   $('curlAdd').classList.add('hidden');
 };
 
+// ---- add from template ----
 let templates = [];
 function showTemplate() {
   const t = templates.find((x) => x.id === $('tplSel').value);
@@ -202,19 +268,17 @@ $('tplSel').onchange = showTemplate;
 $('tplAdd').onclick = async () => {
   const values = Object.fromEntries([...document.querySelectorAll('#tplParams input')].map((i) => [i.dataset.key, i.value]));
   const r = await api('/api/templates/instantiate', { method: 'POST', body: JSON.stringify({ templateId: $('tplSel').value, values }) });
-  let list;
-  try { list = JSON.parse($('json').value); } catch { $('editOut').textContent = 'Fix the JSON first, then add the template.'; return; }
-  // keep ids unique against what is currently in the editor
   const check = await r.json();
-  uniqueCheck(list, check);
-  list.push(check);
-  $('json').value = JSON.stringify(list, null, 2);
-  $('editOut').textContent = `Added "${check.name}". Click Test to try it, then Save.` + placeholderWarning();
+  if (!addToDraft(check, $('editOut'))) return;
+  $('editOut').textContent = `Added "${check.name}". Now click "Test them", then "Save".` + placeholderWarning();
 };
+
+// ---- open / test / save ----
 $('editToggle').onclick = async () => {
   const open = $('editor').classList.toggle('hidden') === false;
   if (open) {
     $('json').value = JSON.stringify(await (await api('/api/checks')).json(), null, 2);
+    setDirty(false); renderDraft();
     templates = await (await api('/api/templates')).json();
     $('tplSel').innerHTML = templates.map((t) => `<option value="${esc(t.id)}">${esc(t.title)}</option>`).join('');
     showTemplate();
@@ -244,7 +308,7 @@ $('test').onclick = async () => {
 };
 $('save').onclick = async () => {
   const data = await editorCall('/api/checks', 'PUT');
-  if (data) { $('editOut').textContent = `Saved ${data.saved} check(s). Click "Run checks now" to run them.` + placeholderWarning(); render(); }
+  if (data) { setDirty(false); $('editOut').textContent = `Saved ${data.saved} check(s). They now run every minute. Click "Run checks now" to run them straight away.` + placeholderWarning(); render(); }
 };
 // when the same check is added twice, number its name as well as its id so they can be told apart
 const uniqueCheck = (list, check) => {
