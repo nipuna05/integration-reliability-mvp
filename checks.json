@@ -1,0 +1,26 @@
+[
+  {
+    "id": "hr-to-payroll-sync",
+    "name": "New employee in HR reaches Payroll with correct salary",
+    "steps": [
+      {
+        "name": "Create employee in HR",
+        "method": "POST",
+        "url": "{{base}}/demo/hr/employees",
+        "body": { "name": "Check-{{runId}}", "salary": 125750 },
+        "expect": { "status": 201 },
+        "extract": { "empId": "id" }
+      },
+      {
+        "name": "Employee exists in Payroll",
+        "url": "{{base}}/demo/payroll/employees/{{empId}}",
+        "expect": { "status": 200, "json": { "name": "Check-{{runId}}" } }
+      },
+      {
+        "name": "Payroll salary matches HR salary",
+        "url": "{{base}}/demo/payroll/employees/{{empId}}",
+        "expect": { "status": 200, "json": { "monthlySalary": 125750 } }
+      }
+    ]
+  }
+]

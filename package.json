@@ -1,0 +1,11 @@
+{
+  "name": "integration-reliability-mvp",
+  "version": "0.1.0",
+  "description": "MVP: continuously verify business transactions across multiple systems, not just API uptime.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" }
+}
