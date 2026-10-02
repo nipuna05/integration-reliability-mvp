@@ -1,0 +1,17 @@
+{
+  "id": "webhook-delivered",
+  "title": "Event triggers a webhook that arrives",
+  "description": "Trigger an event in your app, then verify the receiving system logged it. Catches webhooks that silently stop being delivered.",
+  "params": [
+    { "key": "TRIGGER_URL", "label": "URL that triggers the event", "default": "https://app.example.com/api/test-event" },
+    { "key": "RECEIVER_URL", "label": "Receiver API base URL", "default": "https://receiver.example.com/api" }
+  ],
+  "check": {
+    "id": "webhook-delivered",
+    "name": "Webhook for a new event is delivered to the receiver",
+    "steps": [
+      { "name": "Trigger event", "method": "POST", "url": "<<TRIGGER_URL>>", "body": { "ref": "{{runId}}" }, "expect": { "status": 200 } },
+      { "name": "Receiver logged the event", "url": "<<RECEIVER_URL>>/events/{{runId}}", "expect": { "status": 200, "json": { "ref": "{{runId}}" } } }
+    ]
+  }
+}

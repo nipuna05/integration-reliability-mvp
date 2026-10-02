@@ -8,6 +8,7 @@ import { handleDemo } from './lib/demo.js';
 import { detectTransitions, dispatch } from './lib/alerts.js';
 import { validateChecks } from './lib/checks.js';
 import { createAuth, viaProxy } from './lib/auth.js';
+import { loadTemplates, instantiate } from './lib/templates.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -15,6 +16,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(root, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const CHECKS_FILE = path.join(DATA_DIR, 'checks.json');
 const MAX_HISTORY = 200;
+const templates = await loadTemplates(path.join(root, 'templates'));
 const BASE = { base: `http://localhost:${PORT}` };
 
 // User-edited checks live in data/; checks.json in the repo is the starter set.
@@ -94,6 +96,13 @@ const server = http.createServer(async (req, res) => {
       const results = [];
       for (const c of next) results.push(await runCheck(c, BASE)); // not recorded in history
       return send(res, 200, results);
+    }
+    if (pathname === '/api/templates' && req.method === 'GET') return send(res, 200, templates.map(({ id, title, description, params }) => ({ id, title, description, params })));
+    if (pathname === '/api/templates/instantiate' && req.method === 'POST') {
+      const { templateId, values } = await readJson(req);
+      const t = templates.find((x) => x.id === templateId);
+      if (!t) return send(res, 404, { error: 'unknown template' });
+      return send(res, 200, instantiate(t, values, checks.map((c) => c.id)));
     }
     if (pathname === '/api/history') return send(res, 200, history);
     if (pathname === '/api/run' && req.method === 'POST') return send(res, 200, await runAndRecord());

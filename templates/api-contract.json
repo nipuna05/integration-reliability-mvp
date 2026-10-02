@@ -1,0 +1,17 @@
+{
+  "id": "api-contract",
+  "title": "API returns the expected value",
+  "description": "The simplest check: call an API and verify a field has the value you expect. Good for prices, status flags, config.",
+  "params": [
+    { "key": "API_URL", "label": "API URL to call", "default": "https://api.example.com/status" },
+    { "key": "FIELD", "label": "JSON field to check (e.g. status or data.plan)", "default": "status" },
+    { "key": "VALUE", "label": "Expected value", "default": "ok" }
+  ],
+  "check": {
+    "id": "api-contract",
+    "name": "API field has the expected value",
+    "steps": [
+      { "name": "Call API and verify field", "url": "<<API_URL>>", "expect": { "status": 200, "json": { "<<FIELD>>": "<<VALUE>>" } } }
+    ]
+  }
+}

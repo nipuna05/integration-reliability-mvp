@@ -1,0 +1,19 @@
+{
+  "id": "hr-to-payroll",
+  "title": "HR -> Payroll employee sync",
+  "description": "Create an employee in HR, then verify Payroll received the same person and salary. Defaults point at the built-in demo systems, so it runs as is.",
+  "params": [
+    { "key": "HR_URL", "label": "HR API base URL", "default": "{{base}}/demo/hr" },
+    { "key": "PAYROLL_URL", "label": "Payroll API base URL", "default": "{{base}}/demo/payroll" },
+    { "key": "SALARY", "label": "Test salary", "default": "125750" }
+  ],
+  "check": {
+    "id": "hr-to-payroll",
+    "name": "New employee in HR reaches Payroll with correct salary",
+    "steps": [
+      { "name": "Create employee in HR", "method": "POST", "url": "<<HR_URL>>/employees", "body": { "name": "Check-{{runId}}", "salary": "<<SALARY>>" }, "expect": { "status": 201 }, "extract": { "empId": "id" } },
+      { "name": "Employee exists in Payroll", "url": "<<PAYROLL_URL>>/employees/{{empId}}", "expect": { "status": 200, "json": { "name": "Check-{{runId}}" } } },
+      { "name": "Payroll salary matches HR salary", "url": "<<PAYROLL_URL>>/employees/{{empId}}", "expect": { "status": 200, "json": { "monthlySalary": "<<SALARY>>" } } }
+    ]
+  }
+}

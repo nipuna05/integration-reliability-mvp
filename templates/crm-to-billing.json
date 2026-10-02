@@ -1,0 +1,17 @@
+{
+  "id": "crm-to-billing",
+  "title": "CRM -> Billing customer sync",
+  "description": "Create a customer in the CRM, then verify the billing system has the same customer and email. Adjust the paths and field names to your APIs.",
+  "params": [
+    { "key": "CRM_URL", "label": "CRM API base URL", "default": "https://crm.example.com/api" },
+    { "key": "BILLING_URL", "label": "Billing API base URL", "default": "https://billing.example.com/api" }
+  ],
+  "check": {
+    "id": "crm-to-billing",
+    "name": "New CRM customer appears in Billing with the same email",
+    "steps": [
+      { "name": "Create customer in CRM", "method": "POST", "url": "<<CRM_URL>>/customers", "body": { "name": "Check-{{runId}}", "email": "check-{{runId}}@example.com" }, "expect": { "status": 201 }, "extract": { "customerId": "id" } },
+      { "name": "Customer exists in Billing", "url": "<<BILLING_URL>>/customers/{{customerId}}", "expect": { "status": 200, "json": { "email": "check-{{runId}}@example.com" } } }
+    ]
+  }
+}

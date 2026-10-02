@@ -49,3 +49,14 @@ test('without a password: editing works locally but is refused through a proxy/t
   assert.equal((await call(3802, '/api/checks', { method: 'PUT', body: good, headers: { 'cf-connecting-ip': '1.2.3.4' } })).status, 403);
   assert.equal((await call(3802, '/api/checks/test', { method: 'POST', body: good, headers: { 'x-forwarded-for': '1.2.3.4' } })).status, 403);
 });
+
+test('a template check runs end to end and catches the silent bug', async () => {
+  const { json: check } = await call(3802, '/api/templates/instantiate', { method: 'POST', body: { templateId: 'hr-to-payroll', values: {} } });
+  const run = async () => (await call(3802, '/api/checks/test', { method: 'POST', body: [check] })).json[0];
+  assert.equal((await run()).ok, true);
+  await call(3802, '/demo/break', { method: 'POST', body: { broken: true } });
+  const bad = await run();
+  assert.equal(bad.ok, false);
+  assert.equal(bad.failedStep, 'Payroll salary matches HR salary');
+  await call(3802, '/demo/break', { method: 'POST', body: { broken: false } });
+});
