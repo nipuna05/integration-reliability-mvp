@@ -25,6 +25,7 @@
   input[type=password] { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; }
   select, input.tp { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; max-width:100%; }
   .tprow { display:flex; flex-direction:column; gap:2px; margin:8px 0; } .tprow input { width:100%; box-sizing:border-box; }
+  .why { margin-top:10px; padding:10px 12px; border-left:3px solid var(--bad); background:var(--bg); border-radius:6px; font-size:14px; }
   .hidden { display:none; } pre.out { white-space:pre-wrap; font-size:13px; margin:10px 0 0; }
 </style>
 </head>
@@ -90,9 +91,10 @@ async function render() {
       : `<span class="pill ${last.ok ? 'ok' : 'bad'}">${last.ok ? 'PASSING' : 'FAILING'}</span>`;
     const steps = last ? `<ul class="steps">${last.steps.map((s) =>
       `<li class="${s.ok ? '' : 'fail'}">${s.ok ? '✓' : '✗'} ${esc(s.name)} <span class="muted">${s.ms}ms</span>${s.ok ? '' : '<br>&nbsp;&nbsp;' + s.failures.map(esc).join('<br>&nbsp;&nbsp;')}</li>`).join('')}</ul>` : '';
+    const why = last && !last.ok && last.explanation ? `<div class="why"><b>Likely cause</b> <span class="muted">${last.explanation.source === 'ai' ? '(AI)' : ''}</span><br>${esc(last.explanation.text)}</div>` : '';
     const spark = `<div class="spark">${runs.slice(0, 30).reverse().map((r) => `<i class="${r.ok ? '' : 'bad'}" title="${r.at}"></i>`).join('')}</div>`;
     return `<div class="card"><div class="row"><strong>${esc(c.name)}</strong>${status}</div>
-      ${last ? `<div class="muted">last run ${new Date(last.at).toLocaleTimeString()} · ${last.ms}ms</div>` : ''}${steps}${spark}</div>`;
+      ${last ? `<div class="muted">last run ${new Date(last.at).toLocaleTimeString()} · ${last.ms}ms</div>` : ''}${steps}${why}${spark}</div>`;
   }).join('');
 }
 

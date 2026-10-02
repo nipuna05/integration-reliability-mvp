@@ -30,3 +30,6 @@ In the dashboard: Edit checks -> Add from template. Templates live in 	emplates/
 
 ## Secrets (API keys)
 Dashboard -> Edit checks -> Secrets. Save a key once, then use `{{secret.NAME}}` in a check, e.g. `"headers": { "authorization": "Bearer {{secret.PAYROLL_TOKEN}}" }`. Values stay on the server, are never returned by the API, and are masked (***) in results, history and alerts. Set `SECRETS_KEY` to encrypt them at rest (AES-256-GCM); keep that key safe, without it an encrypted secrets file cannot be read.
+
+## Failure explanations
+Failed checks show a plain-English **Likely cause** (dashboard and alerts). Built-in rules cover rounding/truncation, number mismatches, missing fields, 401/403, 404, 429, 5xx and timeouts. Set `ANTHROPIC_API_KEY` to get AI explanations instead (optional `EXPLAIN_MODEL`); only the failure details (secrets masked), never your keys or full responses, are sent, and the same failure is explained once. If the AI call fails, the rules are used.

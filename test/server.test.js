@@ -92,3 +92,12 @@ test('secrets API: names only, locked without login, used by a check', async () 
     assert.equal((await call(3804, '/api/checks/test', { method: 'POST', body: unknown, headers: h })).status, 400);
   } finally { p.kill(); }
 });
+
+test('a failing run carries a plain-English explanation', async () => {
+  const { json: check } = await call(3802, '/api/templates/instantiate', { method: 'POST', body: { templateId: 'hr-to-payroll', values: {} } });
+  await call(3802, '/demo/break', { method: 'POST', body: { broken: true } });
+  const bad = (await call(3802, '/api/checks/test', { method: 'POST', body: [check] })).json[0];
+  await call(3802, '/demo/break', { method: 'POST', body: { broken: false } });
+  assert.equal(bad.ok, false);
+  assert.match(bad.explanation.text, /rounded down to the nearest 1000/);
+});

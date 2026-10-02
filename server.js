@@ -10,6 +10,7 @@ import { validateChecks } from './lib/checks.js';
 import { createAuth, viaProxy } from './lib/auth.js';
 import { loadTemplates, instantiate } from './lib/templates.js';
 import { createSecretStore } from './lib/secrets.js';
+import { createExplainer } from './lib/explain.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -47,8 +48,15 @@ async function readJson(req) {
   return data ? JSON.parse(data) : {};
 }
 
+const explain = createExplainer({ apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.EXPLAIN_MODEL || undefined, secretValues: () => secrets.values() });
+async function addExplanations(results) {
+  for (const r of results) if (!r.ok) r.explanation = await explain(r);
+  return results;
+}
+
 async function runAndRecord() {
   const results = await runAll(checks, BASE, { secrets: secrets.values() });
+  await addExplanations(results);
   history = [...results, ...history].slice(0, MAX_HISTORY);
   await mkdir(DATA_DIR, { recursive: true });
   await writeFile(HISTORY_FILE, JSON.stringify(history, null, 2)).catch(() => {});
@@ -100,7 +108,7 @@ const server = http.createServer(async (req, res) => {
       if (errors.length) return send(res, 400, { errors });
       const results = [];
       for (const c of next) results.push(await runCheck(c, BASE, { secrets: secrets.values() })); // not recorded in history
-      return send(res, 200, results);
+      return send(res, 200, await addExplanations(results));
     }
     if (pathname === '/api/templates' && req.method === 'GET') return send(res, 200, templates.map(({ id, title, description, params }) => ({ id, title, description, params })));
     if (pathname === '/api/templates/instantiate' && req.method === 'POST') {
