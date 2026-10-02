@@ -66,3 +66,32 @@ test('test alert reports each channel separately', async () => {
   const bad = await sendTestAlert({ mailer: { send: async () => { throw new Error('535 bad credentials'); } } });
   assert.match(bad.email, /failed: 535/);
 });
+
+import { brevoSend } from '../lib/mailer.js';
+
+test('Brevo: correct endpoint, api-key header and body; errors show the provider message', async () => {
+  let seen;
+  const ok = async (url, opts) => { seen = { url, opts, body: JSON.parse(opts.body) }; return { ok: true }; };
+  await brevoSend({ apiKey: 'KEY1', from: 'Alerts <alerts@x.test>' }, { to: ['a@y.test'], subject: '🔴 Failed\r\nBcc: z', text: 'hello' }, ok);
+  assert.equal(seen.url, 'https://api.brevo.com/v3/smtp/email');
+  assert.equal(seen.opts.headers['api-key'], 'KEY1');
+  assert.deepEqual(seen.body.sender, { name: 'Alerts', email: 'alerts@x.test' });
+  assert.deepEqual(seen.body.to, [{ email: 'a@y.test' }]);
+  assert.equal(seen.body.textContent, 'hello');
+  assert.equal(/[\r\n]/.test(seen.body.subject), false);
+
+  const fail = async () => ({ ok: false, status: 401, json: async () => ({ message: 'Key not found' }) });
+  await assert.rejects(brevoSend({ apiKey: 'bad', from: 'a@x.test' }, { to: ['a@y.test'], subject: 's', text: 't' }, fail), /Brevo 401: Key not found/);
+});
+
+test('createMailer prefers Brevo when its key, sender and recipient are set; needs a sender', async () => {
+  const calls = [];
+  const fetchFn = async (url, o) => { calls.push(url); return { ok: true }; };
+  const env = { BREVO_API_KEY: 'k', ALERT_EMAIL_FROM: 'a@x.test', ALERT_EMAIL_TO: 'bob@y.test', SMTP_HOST: 'smtp.x.test' };
+  const m = createMailer(env, async () => { throw new Error('should not use SMTP'); }, fetchFn);
+  assert.equal(m.provider, 'brevo');
+  assert.deepEqual(m.maskedTo, ['b***@y.test']);
+  await m.send('s', 't');
+  assert.deepEqual(calls, ['https://api.brevo.com/v3/smtp/email']);
+  assert.equal(createMailer({ BREVO_API_KEY: 'k', ALERT_EMAIL_TO: 'bob@y.test' }), null, 'no sender, no smtp -> off');
+});

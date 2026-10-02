@@ -156,7 +156,7 @@ $('secSave').onclick = async () => {
 
 async function loadAlerts() {
   const a = await (await api('/api/alerts')).json();
-  const parts = [a.webhook ? 'Chat webhook: on' : 'Chat webhook: off (set ALERT_WEBHOOK_URL)', a.email.enabled ? `Email: on, sending to ${a.email.to.join(', ')}` : 'Email: off (set SMTP_HOST and ALERT_EMAIL_TO)'];
+  const parts = [a.webhook ? 'Chat webhook: on' : 'Chat webhook: off (set ALERT_WEBHOOK_URL)', a.email.enabled ? `Email: on, sending to ${a.email.to.join(', ')}` : 'Email: off (set BREVO_API_KEY + ALERT_EMAIL_FROM + ALERT_EMAIL_TO, or SMTP_HOST + ALERT_EMAIL_TO)'];
   $('alertInfo').textContent = parts.join('  ·  ') + '. You are alerted when a check starts failing and when it recovers.';
 }
 $('alertTest').onclick = async () => {

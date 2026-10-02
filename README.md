@@ -39,3 +39,6 @@ Dashboard -> Edit checks -> Import from curl. Paste a curl command; the API is c
 
 ## Email alerts
 Set these (e.g. in `.demo.env`, which git ignores): `SMTP_HOST`, `SMTP_PORT` (465 = TLS, default), `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL_TO` (comma-separated), optional `ALERT_EMAIL_FROM`. You get an email when a check starts failing and when it recovers. Dashboard -> Edit checks -> Alerts -> **Send test alert** verifies the setup. Gmail needs an *app password* (Google account -> Security -> 2-Step Verification -> App passwords), not your normal password.
+
+### Email through Brevo (when SMTP ports are blocked)
+Set `BREVO_API_KEY`, `ALERT_EMAIL_FROM` (a sender verified in Brevo) and `ALERT_EMAIL_TO`. Brevo is used instead of SMTP when its key is set. It uses HTTPS (port 443), so it works on networks that block mail ports.
