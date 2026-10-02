@@ -91,15 +91,16 @@ async function render() {
 
 async function boot() {
   session = await fetch('/api/session').then((r) => r.json());
-  const locked = session.authRequired && !session.authed;
-  $('login').classList.toggle('hidden', !locked);
+  const locked = session.authRequired && !session.authed && !session.publicRead;
+  const signinOffered = session.authRequired && !session.authed && session.publicRead;
+  $('login').classList.toggle('hidden', !(locked || signinOffered));
   $('app').classList.toggle('hidden', locked);
   $('run').classList.toggle('hidden', locked);
   $('break').classList.toggle('hidden', locked);
   $('fix').classList.toggle('hidden', locked);
   $('editToggle').classList.toggle('hidden', locked || !session.canEdit);
   $('logout').classList.toggle('hidden', !session.authRequired || locked);
-  $('editNote').textContent = !locked && !session.canEdit ? 'Editing is off here (set APP_PASSWORD on the server to enable it).' : '';
+  $('editNote').textContent = signinOffered ? 'Viewing as guest. Sign in above to edit checks.' : (!locked && !session.canEdit ? 'Editing is off here (set APP_PASSWORD on the server to enable it).' : '');
   if (!locked) render().catch(() => {});
 }
 

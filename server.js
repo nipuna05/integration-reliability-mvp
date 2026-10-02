@@ -24,6 +24,9 @@ let checks = JSON.parse(await readFile(existsSync(CHECKS_FILE) ? CHECKS_FILE : p
 let history = existsSync(HISTORY_FILE) ? JSON.parse(await readFile(HISTORY_FILE, 'utf8')) : [];
 const WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
 const auth = createAuth(process.env.APP_PASSWORD);
+// PUBLIC_DEMO=1: anyone can view and run checks; only editing needs the password.
+const PUBLIC_DEMO = process.env.PUBLIC_DEMO === '1';
+const isPublicRead = (req, p) => PUBLIC_DEMO && ((req.method === 'GET' && (p === '/api/checks' || p === '/api/history')) || (req.method === 'POST' && p === '/api/run'));
 // newest run per check, so alerts only fire when status changes
 const lastStatus = new Map();
 for (const h of [...history].reverse()) lastStatus.set(h.id, h.ok);
@@ -63,7 +66,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/healthz') return send(res, 200, { ok: true });
     if (pathname === '/') return send(res, 200, await readFile(path.join(root, 'public', 'index.html'), 'utf8'), 'text/html');
 
-    if (pathname === '/api/session') return send(res, 200, { authRequired: auth.enabled, authed: auth.isAuthed(req), canEdit: canEdit(req) });
+    if (pathname === '/api/session') return send(res, 200, { authRequired: auth.enabled, authed: auth.isAuthed(req), canEdit: canEdit(req), publicRead: PUBLIC_DEMO });
     if (pathname === '/api/login' && req.method === 'POST') {
       const token = auth.login((await readJson(req)).password, ip);
       if (token === 'RATE_LIMITED') return send(res, 429, { error: 'too many attempts, wait a minute' });
@@ -75,7 +78,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true }, 'application/json', { 'set-cookie': 'session=; Max-Age=0; Path=/' });
     }
 
-    if (pathname.startsWith('/api/') && !auth.isAuthed(req)) return send(res, 401, { error: 'login required' });
+    if (pathname.startsWith('/api/') && !auth.isAuthed(req) && !isPublicRead(req, pathname)) return send(res, 401, { error: 'login required' });
 
     if (pathname === '/api/checks' && req.method === 'GET') return send(res, 200, checks);
     if (pathname === '/api/checks' && req.method === 'PUT') {

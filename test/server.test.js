@@ -60,3 +60,17 @@ test('a template check runs end to end and catches the silent bug', async () => 
   assert.equal(bad.failedStep, 'Payroll salary matches HR salary');
   await call(3802, '/demo/break', { method: 'POST', body: { broken: false } });
 });
+
+test('PUBLIC_DEMO: guests can view and run, but not edit or use the editor APIs', async () => {
+  const p = await startServer(3803, { APP_PASSWORD: 'pw123', PUBLIC_DEMO: '1' });
+  try {
+    assert.equal((await call(3803, '/api/checks')).status, 200);
+    assert.equal((await call(3803, '/api/history')).status, 200);
+    assert.equal((await call(3803, '/api/run', { method: 'POST' })).status, 200);
+    assert.equal((await call(3803, '/api/checks', { method: 'PUT', body: good })).status, 401);
+    assert.equal((await call(3803, '/api/checks/test', { method: 'POST', body: good })).status, 401);
+    assert.equal((await call(3803, '/api/templates')).status, 401);
+    const s = (await call(3803, '/api/session')).json;
+    assert.deepEqual([s.authed, s.canEdit, s.publicRead], [false, false, true]);
+  } finally { p.kill(); }
+});
