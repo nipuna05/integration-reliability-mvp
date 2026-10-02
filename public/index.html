@@ -167,7 +167,7 @@ $('curlAdd').onclick = () => {
   if (picked.length) check.steps[0].expect.json = Object.fromEntries(picked.map((f) => [f.path, f.value]));
   let list;
   try { list = JSON.parse($('json').value); } catch { $('curlOut').textContent = 'Fix the JSON in the editor first.'; return; }
-  while (list.some((c) => c.id === check.id)) check.id += '-2';
+  uniqueCheck(list, check);
   list.push(check);
   $('json').value = JSON.stringify(list, null, 2);
   $('curlOut').textContent = 'Added to the editor below. Click Test, then Save.';
@@ -188,10 +188,10 @@ $('tplAdd').onclick = async () => {
   try { list = JSON.parse($('json').value); } catch { $('editOut').textContent = 'Fix the JSON first, then add the template.'; return; }
   // keep ids unique against what is currently in the editor
   const check = await r.json();
-  while (list.some((c) => c.id === check.id)) check.id += '-2';
+  uniqueCheck(list, check);
   list.push(check);
   $('json').value = JSON.stringify(list, null, 2);
-  $('editOut').textContent = `Added "${check.name}". Click Test to try it, then Save.`;
+  $('editOut').textContent = `Added "${check.name}". Click Test to try it, then Save.` + placeholderWarning();
 };
 $('editToggle').onclick = async () => {
   const open = $('editor').classList.toggle('hidden') === false;
@@ -211,14 +211,28 @@ const editorCall = async (url, method) => {
   if (!r.ok) { $('editOut').textContent = (data.errors || [data.error]).join('\n'); return null; }
   return data;
 };
+// URLs still pointing at example.com/.org are template placeholders that can never work
+const placeholderWarning = () => {
+  const bad = /https?:\/\/[^"\s]*\bexample\.(com|org|net)\b/.test($('json').value);
+  return bad ? '\n\nWarning: some URLs still contain example.com. That is a placeholder, not a real address. Replace it with your own API URL, or those checks will always fail.' : '';
+};
 $('test').onclick = async () => {
   $('editOut').textContent = 'Running…';
   const results = await editorCall('/api/checks/test', 'POST');
-  if (results) $('editOut').textContent = results.map((r) => `${r.ok ? 'PASS' : 'FAIL'}  ${r.name}` + (r.ok ? '' : `\n   ${r.failedStep}: ${r.failures.join('; ')}`)).join('\n');
+  if (!results) return;
+  const failed = results.filter((r) => !r.ok).length;
+  $('editOut').textContent = `${results.length - failed} passed, ${failed} failed\n\n` + results.map((r) => `${r.ok ? 'PASS' : 'FAIL'}  ${r.name}` + (r.ok ? '' : `\n   ${r.failedStep}: ${r.failures.join('; ')}` + (r.explanation ? `\n   Likely cause: ${r.explanation.text}` : ''))).join('\n\n') + placeholderWarning();
 };
 $('save').onclick = async () => {
   const data = await editorCall('/api/checks', 'PUT');
-  if (data) { $('editOut').textContent = `Saved ${data.saved} check(s). Click "Run checks now" to run them.`; render(); }
+  if (data) { $('editOut').textContent = `Saved ${data.saved} check(s). Click "Run checks now" to run them.` + placeholderWarning(); render(); }
+};
+// when the same check is added twice, number its name as well as its id so they can be told apart
+const uniqueCheck = (list, check) => {
+  let n = 1;
+  const base = check.name;
+  while (list.some((c) => c.id === check.id)) { n++; check.id = `${check.id.replace(/-\d+$/, '')}-${n}`; check.name = `${base} (${n})`; }
+  return check;
 };
 
 $('run').onclick = async () => { $('run').disabled = true; await api('/api/run', { method: 'POST' }).catch(() => {}); $('run').disabled = false; render().catch(() => {}); };
