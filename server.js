@@ -11,6 +11,8 @@ import { createAuth, viaProxy } from './lib/auth.js';
 import { loadTemplates, instantiate } from './lib/templates.js';
 import { createSecretStore } from './lib/secrets.js';
 import { createExplainer } from './lib/explain.js';
+import { parseCurl, buildCheck, secretNameFor, previewFields, CurlError } from './lib/curl.js';
+import { redact } from './lib/secrets.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -126,6 +128,30 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { saved: sm[1] });
       }
       if (req.method === 'DELETE') { await secrets.remove(sm[1]); return send(res, 200, { deleted: sm[1] }); }
+    }
+    if (pathname === '/api/curl/import' && req.method === 'POST') {
+      if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
+      let parsed;
+      try { parsed = parseCurl((await readJson(req)).command || ''); }
+      catch (e) { if (e instanceof CurlError) return send(res, 400, { error: e.message }); throw e; }
+      let probe;
+      try { // one real request so the user sees the result straight away
+        const r = await fetch(parsed.url, { method: parsed.method, headers: parsed.headers, body: parsed.body === undefined ? undefined : JSON.stringify(parsed.body), signal: AbortSignal.timeout(8000) });
+        const text = await r.text();
+        let json; try { json = JSON.parse(text); } catch { /* not JSON */ }
+        probe = { status: r.status, fields: previewFields(json) };
+      } catch (e) { return send(res, 400, { error: `Could not reach ${parsed.host}: ${e.cause?.code || e.message}` }); }
+      const taken = secrets.names(), secretNames = [];
+      try {
+        for (const item of parsed.sensitive) {
+          const name = secretNameFor(parsed.host, item, taken);
+          await secrets.set(name, item.value);
+          taken.push(name);
+          secretNames.push({ item, name });
+        }
+      } catch (e) { return send(res, 400, { error: e.message }); }
+      const check = buildCheck(parsed, { status: probe.status, secretNames, existingIds: checks.map((c) => c.id) });
+      return send(res, 200, redact({ check, preview: probe, secretsSaved: secretNames.map((s) => s.name) }, secrets.values()));
     }
     if (pathname === '/api/history') return send(res, 200, history);
     if (pathname === '/api/run' && req.method === 'POST') return send(res, 200, await runAndRecord());

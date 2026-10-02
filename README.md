@@ -33,3 +33,6 @@ Dashboard -> Edit checks -> Secrets. Save a key once, then use `{{secret.NAME}}`
 
 ## Failure explanations
 Failed checks show a plain-English **Likely cause** (dashboard and alerts). Built-in rules cover rounding/truncation, number mismatches, missing fields, 401/403, 404, 429, 5xx and timeouts. Set `ANTHROPIC_API_KEY` to get AI explanations instead (optional `EXPLAIN_MODEL`); only the failure details (secrets masked), never your keys or full responses, are sent, and the same failure is explained once. If the AI call fails, the rules are used.
+
+## Import from curl
+Dashboard -> Edit checks -> Import from curl. Paste a curl command; the API is called once, keys in headers/URL are saved as secrets, and a check is built. See docs/07-user-guide-and-test-plan.md for a plain-language guide and QA test plan.

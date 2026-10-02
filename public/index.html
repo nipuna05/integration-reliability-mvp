@@ -48,6 +48,14 @@
     <div id="list"></div>
     <div class="bar"><button id="editToggle" class="hidden">Edit checks</button><button id="logout" class="hidden">Sign out</button><span class="muted" id="editNote" style="align-self:center"></span></div>
     <div id="editor" class="card hidden">
+      <div class="card" style="background:transparent">
+        <strong>Import from curl (fastest way to start)</strong>
+        <p class="muted">Paste a curl command for an API you already use (from its docs, Postman or the browser's Network tab, "Copy as cURL"). The app calls it once, shows the result, hides any API key as a secret, and builds the check.</p>
+        <textarea id="curlCmd" spellcheck="false" style="min-height:90px" placeholder="curl https://api.example.com/status -H 'Authorization: Bearer ...'"></textarea>
+        <div class="bar" style="margin:10px 0 0"><button id="curlGo">Import</button><button id="curlAdd" class="primary hidden">Add to editor</button></div>
+        <div id="curlOut" class="muted"></div>
+        <div id="curlFields"></div>
+      </div>
       <strong>Edit checks (JSON)</strong>
       <p class="muted">Each check has steps (url, method, body, expect, extract). Use {{base}}, {{runId}} and extracted variables in URLs/bodies. "Test" runs without saving or recording.</p>
       <div class="card" style="background:transparent">
@@ -138,6 +146,32 @@ $('secSave').onclick = async () => {
   const r = await api('/api/secrets/' + encodeURIComponent($('secName').value.trim()), { method: 'PUT', body: JSON.stringify({ value: $('secVal').value }) });
   $('secErr').textContent = r.ok ? '' : (await r.json()).error;
   if (r.ok) { $('secName').value = ''; $('secVal').value = ''; loadSecrets(); }
+};
+
+let curlImport = null;
+$('curlGo').onclick = async () => {
+  $('curlOut').textContent = 'Working…'; $('curlFields').innerHTML = ''; $('curlAdd').classList.add('hidden');
+  const r = await api('/api/curl/import', { method: 'POST', body: JSON.stringify({ command: $('curlCmd').value }) });
+  const d = await r.json();
+  if (!r.ok) { $('curlOut').textContent = d.error; return; }
+  curlImport = d;
+  $('curlOut').textContent = `The API answered with status ${d.preview.status}.` + (d.secretsSaved.length ? ` Saved ${d.secretsSaved.length} key(s) as secrets: ${d.secretsSaved.join(', ')}.` : '');
+  $('curlFields').innerHTML = d.preview.fields.length
+    ? '<div class="muted" style="margin-top:8px">Also require these values (tick only stable ones, not times or IDs):</div>' + d.preview.fields.map((f, i) => `<label style="display:block"><input type="checkbox" data-i="${i}"> ${esc(f.path)} = ${esc(JSON.stringify(f.value))}</label>`).join('')
+    : '';
+  $('curlAdd').classList.remove('hidden');
+};
+$('curlAdd').onclick = () => {
+  const check = curlImport.check;
+  const picked = [...document.querySelectorAll('#curlFields input:checked')].map((i) => curlImport.preview.fields[+i.dataset.i]);
+  if (picked.length) check.steps[0].expect.json = Object.fromEntries(picked.map((f) => [f.path, f.value]));
+  let list;
+  try { list = JSON.parse($('json').value); } catch { $('curlOut').textContent = 'Fix the JSON in the editor first.'; return; }
+  while (list.some((c) => c.id === check.id)) check.id += '-2';
+  list.push(check);
+  $('json').value = JSON.stringify(list, null, 2);
+  $('curlOut').textContent = 'Added to the editor below. Click Test, then Save.';
+  $('curlAdd').classList.add('hidden');
 };
 
 let templates = [];

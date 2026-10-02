@@ -101,3 +101,23 @@ test('a failing run carries a plain-English explanation', async () => {
   assert.equal(bad.ok, false);
   assert.match(bad.explanation.text, /rounded down to the nearest 1000/);
 });
+
+test('curl import: calls the API once, stores the key as a secret, returns a runnable check', async () => {
+  const p = await startServer(3805, { APP_PASSWORD: 'pw123' });
+  try {
+    const { json } = await call(3805, '/api/login', { method: 'POST', body: { password: 'pw123' } });
+    const h = { authorization: `Bearer ${json.token}` };
+    const cmd = `curl http://localhost:3805/demo/secure/ping -H 'Authorization: Bearer demo-key-123'`;
+    assert.equal((await call(3805, '/api/curl/import', { method: 'POST', body: { command: cmd } })).status, 401);
+    const r = await call(3805, '/api/curl/import', { method: 'POST', body: { command: cmd }, headers: h });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.preview.status, 200);
+    assert.deepEqual(r.json.preview.fields, [{ path: 'status', value: 'ok' }]);
+    assert.equal(JSON.stringify(r.json).includes('demo-key-123'), false, 'key leaked in the response');
+    assert.equal(r.json.secretsSaved.length, 1);
+    const run = await call(3805, '/api/checks/test', { method: 'POST', body: [r.json.check], headers: h });
+    assert.equal(run.json[0].ok, true);
+    const bad = await call(3805, '/api/curl/import', { method: 'POST', body: { command: 'curl -F a=b http://x.test' }, headers: h });
+    assert.equal(bad.status, 400);
+  } finally { p.kill(); }
+});
