@@ -208,16 +208,13 @@ const editorCall = async (url, method) => {
   try { body = JSON.parse($('json').value); } catch (e) { $('editOut').textContent = 'Not valid JSON: ' + e.message; return null; }
   const r = await api(url, { method, body: JSON.stringify(body) });
   const data = await r.json();
-  if (!r.ok) { $('editOut').textContent = (data.errors || [data.error]).join('
-'); return null; }
+  if (!r.ok) { $('editOut').textContent = (data.errors || [data.error]).join('\n'); return null; }
   return data;
 };
 $('test').onclick = async () => {
   $('editOut').textContent = 'Running…';
   const results = await editorCall('/api/checks/test', 'POST');
-  if (results) $('editOut').textContent = results.map((r) => `${r.ok ? 'PASS' : 'FAIL'}  ${r.name}` + (r.ok ? '' : `
-   ${r.failedStep}: ${r.failures.join('; ')}`)).join('
-');
+  if (results) $('editOut').textContent = results.map((r) => `${r.ok ? 'PASS' : 'FAIL'}  ${r.name}` + (r.ok ? '' : `\n   ${r.failedStep}: ${r.failures.join('; ')}`)).join('\n');
 };
 $('save').onclick = async () => {
   const data = await editorCall('/api/checks', 'PUT');
