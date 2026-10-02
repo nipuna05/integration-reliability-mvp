@@ -3,3 +3,9 @@ data/
 .env
 dist/
 .demo.env
+
+# Firebase / Google credentials: never commit
+google-services.json
+GoogleService-Info.plist
+*firebase-adminsdk*.json
+*service-account*.json

@@ -1,0 +1,8 @@
+# EAS Build uploads the project using this file instead of .gitignore, so that the git-ignored
+# google-services.json (Firebase config) is still included in the cloud build.
+node_modules/
+dist/
+.expo/
+.git/
+*firebase-adminsdk*.json
+*service-account*.json
