@@ -57,3 +57,6 @@ Set `WEEKLY_DIGEST=1` to email (and post to the chat webhook) a plain-text relia
 
 ## Public status page
 Set `STATUS_PAGE=1` (and optionally `STATUS_TITLE`) to publish `/status` to anyone with the link, no login. It shows only check names, up/down, 7-day uptime and incident times (last 14 days). It never shows URLs, errors, steps, causes or keys. Set `"public": false` on a check (or untick **public** in the editor) to hide it. Off by default.
+
+## Phone push notifications
+The phone app registers its Expo push token with `POST /api/devices` (signed in). On every failure and recovery the server asks Expo's push service (which delivers through Firebase) to notify all registered phones; uninstalled apps are removed automatically. **Alerts -> Send test alert** reports the push result. Requires a Firebase project, the FCM V1 service-account key uploaded with `eas credentials`, and an installed EAS build (push does not work in Expo Go on Android). Override the push endpoint with `EXPO_PUSH_URL` (tests do this).

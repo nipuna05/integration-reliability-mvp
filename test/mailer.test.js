@@ -62,7 +62,7 @@ test('dispatch emails on failure and recovery; a broken mailer does not stop oth
 
 test('test alert reports each channel separately', async () => {
   const out = await sendTestAlert({ webhookUrl: undefined, mailer: { send: async () => {} } });
-  assert.deepEqual(out, { webhook: 'not configured', email: 'sent' });
+  assert.deepEqual(out, { webhook: 'not configured', email: 'sent', push: 'no phones registered' });
   const bad = await sendTestAlert({ mailer: { send: async () => { throw new Error('535 bad credentials'); } } });
   assert.match(bad.email, /failed: 535/);
 });

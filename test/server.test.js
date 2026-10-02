@@ -131,7 +131,7 @@ test('server: test alert goes out by email, status endpoint shows masked address
     assert.equal((await call(3806, '/api/alerts/test', { method: 'POST' })).status, 401);
     const { json } = await call(3806, '/api/login', { method: 'POST', body: { password: 'pw123' } });
     const h = { authorization: `Bearer ${json.token}` };
-    assert.deepEqual((await call(3806, '/api/alerts', { headers: h })).json, { weeklyDigest: false, webhook: false, email: { enabled: true, to: ['a***@example.test'] } });
+    assert.deepEqual((await call(3806, '/api/alerts', { headers: h })).json, { weeklyDigest: false, push: { devices: 0 }, webhook: false, email: { enabled: true, to: ['a***@example.test'] } });
     const t = await call(3806, '/api/alerts/test', { method: 'POST', headers: h });
     assert.equal(t.json.email, 'sent');
     assert.ok(log.cmds.includes('RCPT TO:<alice@example.test>'));
@@ -216,4 +216,43 @@ test('public status page: off by default; when on, readable by anyone, shows out
     assert.equal((await call(3810, '/api/session', { headers: h })).json.statusPage, true);
     assert.equal((await call(3810, '/api/checks', { method: 'PUT', headers: h, body: [{ ...shown, public: 'yes' }] })).status, 400);
   } finally { off.kill(); on.kill(); }
+});
+
+import http from 'node:http';
+
+test('push: a phone registers over the API and gets a push on failure and recovery (fake Expo service)', async () => {
+  const received = [];
+  const expo = http.createServer((req, res) => {
+    let b = ''; req.on('data', (d) => (b += d));
+    req.on('end', () => { const msgs = JSON.parse(b); received.push(...msgs); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: msgs.map(() => ({ status: 'ok' })) })); });
+  });
+  await new Promise((r) => expo.listen(0, r));
+  const p = await startServer(3812, { APP_PASSWORD: 'pw123', EXPO_PUSH_URL: `http://localhost:${expo.address().port}` });
+  try {
+    const phone = 'ExponentPushToken[abcdefghijklmnop]';
+    assert.equal((await call(3812, '/api/devices', { method: 'POST', body: { token: phone } })).status, 401, 'must be signed in');
+    const { json } = await call(3812, '/api/login', { method: 'POST', body: { password: 'pw123' } });
+    const h = { authorization: `Bearer ${json.token}` };
+    assert.equal((await call(3812, '/api/devices', { method: 'POST', body: { token: 'not-a-token' }, headers: h })).status, 400);
+    assert.equal((await call(3812, '/api/devices', { method: 'POST', body: { token: phone, label: 'Test phone' }, headers: h })).json.devices, 1);
+    assert.equal((await call(3812, '/api/alerts', { headers: h })).json.push.devices, 1);
+
+    const t = await call(3812, '/api/alerts/test', { method: 'POST', headers: h });
+    assert.equal(t.json.push, 'sent to 1 device(s)');
+
+    received.length = 0;
+    await call(3812, '/api/run', { method: 'POST', headers: h });              // healthy: first run is quiet
+    await call(3812, '/demo/break', { method: 'POST', body: { broken: true } });
+    await call(3812, '/api/run', { method: 'POST', headers: h });              // fails: push
+    await call(3812, '/api/run', { method: 'POST', headers: h });              // still failing: no second push
+    await call(3812, '/demo/break', { method: 'POST', body: { broken: false } });
+    await call(3812, '/api/run', { method: 'POST', headers: h });              // recovered: push
+    assert.equal(received.length, 2, `expected 2 pushes, got ${received.length}`);
+    assert.match(received[0].title, /Failed/);
+    assert.match(received[0].body, /monthlySalary/);
+    assert.match(received[1].title, /Recovered/);
+    assert.equal(received[0].to, phone);
+
+    assert.equal((await call(3812, '/api/devices', { method: 'DELETE', body: { token: phone }, headers: h })).json.devices, 0);
+  } finally { p.kill(); expo.close(); }
 });

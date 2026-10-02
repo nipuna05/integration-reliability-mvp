@@ -8,6 +8,7 @@ import { handleDemo } from './lib/demo.js';
 import { detectTransitions, dispatch, sendTestAlert, sendWebhook } from './lib/alerts.js';
 import { buildDigest } from './lib/digest.js';
 import { buildPublicStatus } from './lib/publicStatus.js';
+import { createDeviceStore, createPush } from './lib/push.js';
 import { createMailer } from './lib/mailer.js';
 import { validateChecks } from './lib/checks.js';
 import { createAuth, viaProxy } from './lib/auth.js';
@@ -41,6 +42,8 @@ const STATUS_TITLE = process.env.STATUS_TITLE || 'Service status';
 const DIGEST_FILE =path.join(DATA_DIR, 'digest.json');
 const WEEKLY_DIGEST = process.env.WEEKLY_DIGEST === '1';
 let lastDigestAt = existsSync(DIGEST_FILE) ? JSON.parse(await readFile(DIGEST_FILE, 'utf8')).lastSentAt : undefined;
+const devices = await createDeviceStore(path.join(DATA_DIR, 'devices.json'));
+const push = createPush({ store: devices, url: process.env.EXPO_PUSH_URL || undefined });
 const secrets = await createSecretStore(path.join(DATA_DIR, 'secrets.json'), process.env.SECRETS_KEY);
 const WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
 const mailer = createMailer();
@@ -84,7 +87,7 @@ async function runAndRecord(list = checks) {
   const events = detectTransitions(lastStatus, results);
   stats.record(results, events);
   await writeFile(STATS_FILE, JSON.stringify(stats.toJSON())).catch(() => {});
-  await dispatch(events, { webhookUrl: WEBHOOK_URL, mailer });
+  await dispatch(events, { webhookUrl: WEBHOOK_URL, mailer, push });
   return results;
 }
 
@@ -198,10 +201,17 @@ const server = http.createServer(async (req, res) => {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
       return send(res, 200, await sendDigest());
     }
-    if (pathname === '/api/alerts' && req.method === 'GET') return send(res, 200, { weeklyDigest: WEEKLY_DIGEST, webhook: Boolean(WEBHOOK_URL), email: mailer ? { enabled: true, to: mailer.maskedTo } : { enabled: false } });
+    if (pathname === '/api/alerts' && req.method === 'GET') return send(res, 200, { weeklyDigest: WEEKLY_DIGEST, push: { devices: devices.count() }, webhook: Boolean(WEBHOOK_URL), email: mailer ? { enabled: true, to: mailer.maskedTo } : { enabled: false } });
     if (pathname === '/api/alerts/test' && req.method === 'POST') {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
-      return send(res, 200, await sendTestAlert({ webhookUrl: WEBHOOK_URL, mailer }));
+      return send(res, 200, await sendTestAlert({ webhookUrl: WEBHOOK_URL, mailer, push }));
+    }
+    if (pathname === '/api/devices' && (req.method === 'POST' || req.method === 'DELETE')) {
+      const { token, label } = await readJson(req); // any signed-in user may register their own phone
+      try {
+        if (req.method === 'POST') await devices.add(token, label); else await devices.remove(token);
+      } catch (e) { return send(res, 400, { error: e.message }); }
+      return send(res, 200, { devices: devices.count() });
     }
     if (pathname === '/api/stats' && req.method === 'GET') return send(res, 200, stats.summary(checks.map((c) => c.id)));
     if (pathname === '/api/history') return send(res, 200, history);

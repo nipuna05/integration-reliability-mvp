@@ -263,7 +263,7 @@ $('secSave').onclick = async () => {
 // ---- alerts ----
 async function loadAlerts() {
   const a = await (await api('/api/alerts')).json();
-  const parts = [a.webhook ? 'Chat webhook: on' : 'Chat webhook: off (set ALERT_WEBHOOK_URL)', a.email.enabled ? `Email: on, sending to ${a.email.to.join(', ')}` : 'Email: off (set BREVO_API_KEY + ALERT_EMAIL_FROM + ALERT_EMAIL_TO, or SMTP_HOST + ALERT_EMAIL_TO)'];
+  const parts = [a.push.devices ? `Phone push: ${a.push.devices} phone(s) registered` : 'Phone push: no phones registered (sign in on the phone app)', a.webhook ? 'Chat webhook: on' : 'Chat webhook: off (set ALERT_WEBHOOK_URL)',a.email.enabled ? `Email: on, sending to ${a.email.to.join(', ')}` : 'Email: off (set BREVO_API_KEY + ALERT_EMAIL_FROM + ALERT_EMAIL_TO, or SMTP_HOST + ALERT_EMAIL_TO)'];
   $('alertInfo').textContent = parts.join('  ·  ') + '. You are alerted when a check starts failing and when it recovers.';
   $('digestInfo').textContent = a.weeklyDigest ? 'The weekly report (uptime table + incidents) is sent automatically every 7 days.' : 'The weekly report is off. Set WEEKLY_DIGEST=1 on the server to send it automatically every 7 days. You can still send it now.';
 }
@@ -277,7 +277,7 @@ $('alertTest').onclick = async () => {
   $('alertOut').textContent = 'Sending…';
   const r = await api('/api/alerts/test', { method: 'POST' });
   const d = await r.json();
-  $('alertOut').textContent = r.ok ? `Chat webhook: ${d.webhook}\nEmail: ${d.email}` : d.error;
+  $('alertOut').textContent = r.ok ? `Phone push: ${d.push}\nChat webhook: ${d.webhook}\nEmail: ${d.email}` : d.error;
 };
 
 // ---- add from curl ----
