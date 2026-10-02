@@ -45,3 +45,6 @@ Set `BREVO_API_KEY`, `ALERT_EMAIL_FROM` (a sender verified in Brevo) and `ALERT_
 
 ## UI smoke test
 `npm run test:ui` drives the dashboard in a real headless Microsoft Edge (sign in, curl import, template, test, save, remove) and fails on any page error. Needs Edge installed.
+
+## Schedules
+Each check may set `"every": "30s" | "5m" | "1h" | "1d"` (editor: the **Runs** menu on each row). Checks without it use `INTERVAL_SEC` (default 60). Shortest allowed: 30s (`MIN_INTERVAL_SEC`). History is kept per check (last 100 runs each), so a frequent check cannot push out a rare one.

@@ -14,13 +14,16 @@ import { createSecretStore } from './lib/secrets.js';
 import { createExplainer } from './lib/explain.js';
 import { parseCurl, buildCheck, secretNameFor, previewFields, CurlError } from './lib/curl.js';
 import { redact } from './lib/secrets.js';
+import { dueChecks, trimHistory } from './lib/schedule.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || path.join(root, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const CHECKS_FILE = path.join(DATA_DIR, 'checks.json');
-const MAX_HISTORY = 200;
+const MAX_HISTORY_PER_CHECK = 100;
+const MIN_INTERVAL_SEC = Number(process.env.MIN_INTERVAL_SEC || 30); // shortest allowed per-check schedule
+const TICK_MS = Number(process.env.TICK_MS || 5000); // how often the scheduler looks for due checks
 const templates = await loadTemplates(path.join(root, 'templates'));
 const BASE = { base: `http://localhost:${PORT}` };
 
@@ -58,10 +61,13 @@ async function addExplanations(results) {
   return results;
 }
 
-async function runAndRecord() {
-  const results = await runAll(checks, BASE, { secrets: secrets.values() });
+const lastRun = new Map(); // check id -> time of its last run, drives per-check schedules
+async function runAndRecord(list = checks) {
+  const results = await runAll(list, BASE, { secrets: secrets.values() });
+  const now = Date.now();
+  for (const r of results) lastRun.set(r.id, now);
   await addExplanations(results);
-  history = [...results, ...history].slice(0, MAX_HISTORY);
+  history = trimHistory([...results, ...history], MAX_HISTORY_PER_CHECK);
   await mkdir(DATA_DIR, { recursive: true });
   await writeFile(HISTORY_FILE, JSON.stringify(history, null, 2)).catch(() => {});
   await dispatch(detectTransitions(lastStatus, results), { webhookUrl: WEBHOOK_URL, mailer });
@@ -80,7 +86,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/healthz') return send(res, 200, { ok: true });
     if (pathname === '/') return send(res, 200, await readFile(path.join(root, 'public', 'index.html'), 'utf8'), 'text/html', { 'cache-control': 'no-store' });
 
-    if (pathname === '/api/session') return send(res, 200, { authRequired: auth.enabled, authed: auth.isAuthed(req), canEdit: canEdit(req), publicRead: PUBLIC_DEMO });
+    if (pathname === '/api/session') return send(res, 200, { authRequired: auth.enabled, authed: auth.isAuthed(req), canEdit: canEdit(req), publicRead: PUBLIC_DEMO, defaultIntervalSec: intervalSec, minIntervalSec: MIN_INTERVAL_SEC });
     if (pathname === '/api/login' && req.method === 'POST') {
       const token = auth.login((await readJson(req)).password, ip);
       if (token === 'RATE_LIMITED') return send(res, 429, { error: 'too many attempts, wait a minute' });
@@ -98,7 +104,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/checks' && req.method === 'PUT') {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
       const next = await readJson(req);
-      const errors = validateChecks(next, secrets.names());
+      const errors = validateChecks(next, secrets.names(), { minSec: MIN_INTERVAL_SEC });
       if (errors.length) return send(res, 400, { errors });
       checks = next;
       await mkdir(DATA_DIR, { recursive: true });
@@ -108,7 +114,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/checks/test' && req.method === 'POST') {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
       const next = await readJson(req);
-      const errors = validateChecks(next, secrets.names());
+      const errors = validateChecks(next, secrets.names(), { minSec: MIN_INTERVAL_SEC });
       if (errors.length) return send(res, 400, { errors });
       const results = [];
       for (const c of next) results.push(await runCheck(c, BASE, { secrets: secrets.values() })); // not recorded in history
@@ -171,5 +177,12 @@ const server = http.createServer(async (req, res) => {
 const intervalSec = Number(process.env.INTERVAL_SEC || 60);
 server.listen(PORT, () => {
   console.log(`Integration Reliability MVP on http://localhost:${PORT}  (scheduled run every ${intervalSec}s, login ${auth.enabled ? 'ON' : 'OFF'})`);
-  setInterval(() => runAndRecord().catch(console.error), intervalSec * 1000);
+  let busy = false; // never start a new round while the previous one is still running
+  setInterval(async () => {
+    if (busy) return;
+    const due = dueChecks(checks, lastRun, Date.now(), intervalSec);
+    if (!due.length) return;
+    busy = true;
+    try { await runAndRecord(due); } catch (e) { console.error(e); } finally { busy = false; }
+  }, TICK_MS);
 });

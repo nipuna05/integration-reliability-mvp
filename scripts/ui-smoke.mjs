@@ -80,6 +80,10 @@ async function main() {
   await waitFor(`document.querySelectorAll('#draftList .chk').length === 4`, 'second copy of the template');
   check('adding the same template twice numbers the second one', (await text('#draftList')).includes('(2)'));
 
+  check('every check row has a schedule picker defaulting to the server default', await run(`document.querySelectorAll('#draftList select[data-every]').length === 4 && document.querySelector('#draftList select[data-every]').selectedOptions[0].text.startsWith('default')`));
+  await run(`(() => { const s = document.querySelector('#draftList select[data-every="1"]'); s.value = '5m'; s.dispatchEvent(new Event('change')); })()`);
+  check('choosing "every 5 minutes" writes it into the check', (await run(`JSON.parse(document.querySelector('#json').value)[1].every`)) === '5m');
+
   await click('#test');
   await waitFor(`document.querySelector('#editOut').innerText.includes('passed')`, 'test results');
   check('Test reports all four passing', (await text('#editOut')).startsWith('4 passed, 0 failed'));
@@ -87,6 +91,9 @@ async function main() {
   await click('#save');
   await waitFor(`document.querySelector('#editOut').innerText.startsWith('Saved')`, 'save message');
   check('Save confirms and clears the unsaved marker', (await text('#editOut')).startsWith('Saved 4') && (await text('#dirty')) === '');
+
+  await waitFor(`document.querySelectorAll('#list .card').length === 4`, 'dashboard cards after save');
+  check('dashboard cards show each check\'s schedule', await run(`[...document.querySelectorAll('#list .card')].some((c) => c.innerText.includes('runs every 5m')) && [...document.querySelectorAll('#list .card')].some((c) => c.innerText.includes('runs every 1h'))`));
 
   await run(`document.querySelectorAll('#draftList [data-rm]')[3].click()`);
   check('Remove drops a check and marks unsaved', (await run(`document.querySelectorAll('#draftList .chk').length`)) === 3 && (await text('#dirty')).includes('unsaved'));

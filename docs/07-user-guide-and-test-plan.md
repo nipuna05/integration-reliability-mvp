@@ -50,7 +50,7 @@ A public API to practice with: `curl https://jsonplaceholder.typicode.com/todos/
 
 ## 4. What it does NOT do yet (be honest when testing)
 - One shared login only, no separate user accounts.
-- Checks run on one schedule for all checks (every 60 seconds by default).
+- Each check can have its own schedule (pick "Runs ..." on its row in the editor: every minute up to every day). Checks without one use the server default, every 60 seconds. The shortest allowed is 30 seconds.
 - No email alerts, no phone push notifications.
 - JSON request bodies only (no form uploads); curl import supports GET, POST, PUT, PATCH, DELETE.
 - Android app only shows status and runs checks. It has no login and cannot create checks.
