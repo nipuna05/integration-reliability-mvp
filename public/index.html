@@ -72,6 +72,12 @@
         <div class="bar" style="margin:10px 0 0"><input class="tp" id="secName" placeholder="NAME_LIKE_THIS" style="width:200px"><input type="password" id="secVal" placeholder="value"><button id="secSave">Save secret</button></div>
         <div class="fail" id="secErr"></div>
       </div>
+      <div class="card" style="background:transparent">
+        <strong>Alerts</strong>
+        <p class="muted" id="alertInfo">Loading…</p>
+        <div class="bar" style="margin:10px 0 0"><button id="alertTest">Send test alert</button></div>
+        <pre class="out" id="alertOut"></pre>
+      </div>
       <textarea id="json" spellcheck="false"></textarea>
       <div class="bar" style="margin:10px 0 0"><button id="test">Test</button><button class="primary" id="save">Save</button></div>
       <pre class="out" id="editOut"></pre>
@@ -148,6 +154,18 @@ $('secSave').onclick = async () => {
   if (r.ok) { $('secName').value = ''; $('secVal').value = ''; loadSecrets(); }
 };
 
+async function loadAlerts() {
+  const a = await (await api('/api/alerts')).json();
+  const parts = [a.webhook ? 'Chat webhook: on' : 'Chat webhook: off (set ALERT_WEBHOOK_URL)', a.email.enabled ? `Email: on, sending to ${a.email.to.join(', ')}` : 'Email: off (set SMTP_HOST and ALERT_EMAIL_TO)'];
+  $('alertInfo').textContent = parts.join('  ·  ') + '. You are alerted when a check starts failing and when it recovers.';
+}
+$('alertTest').onclick = async () => {
+  $('alertOut').textContent = 'Sending…';
+  const r = await api('/api/alerts/test', { method: 'POST' });
+  const d = await r.json();
+  $('alertOut').textContent = r.ok ? `Chat webhook: ${d.webhook}\nEmail: ${d.email}` : d.error;
+};
+
 let curlImport = null;
 $('curlGo').onclick = async () => {
   $('curlOut').textContent = 'Working…'; $('curlFields').innerHTML = ''; $('curlAdd').classList.add('hidden');
@@ -201,6 +219,7 @@ $('editToggle').onclick = async () => {
     $('tplSel').innerHTML = templates.map((t) => `<option value="${esc(t.id)}">${esc(t.title)}</option>`).join('');
     showTemplate();
     loadSecrets();
+    loadAlerts();
   }
 };
 const editorCall = async (url, method) => {

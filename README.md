@@ -36,3 +36,6 @@ Failed checks show a plain-English **Likely cause** (dashboard and alerts). Buil
 
 ## Import from curl
 Dashboard -> Edit checks -> Import from curl. Paste a curl command; the API is called once, keys in headers/URL are saved as secrets, and a check is built. See docs/07-user-guide-and-test-plan.md for a plain-language guide and QA test plan.
+
+## Email alerts
+Set these (e.g. in `.demo.env`, which git ignores): `SMTP_HOST`, `SMTP_PORT` (465 = TLS, default), `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL_TO` (comma-separated), optional `ALERT_EMAIL_FROM`. You get an email when a check starts failing and when it recovers. Dashboard -> Edit checks -> Alerts -> **Send test alert** verifies the setup. Gmail needs an *app password* (Google account -> Security -> 2-Step Verification -> App passwords), not your normal password.

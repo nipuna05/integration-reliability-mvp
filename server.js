@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { runAll, runCheck } from './lib/runner.js';
 import { handleDemo } from './lib/demo.js';
-import { detectTransitions, dispatch } from './lib/alerts.js';
+import { detectTransitions, dispatch, sendTestAlert } from './lib/alerts.js';
+import { createMailer } from './lib/mailer.js';
 import { validateChecks } from './lib/checks.js';
 import { createAuth, viaProxy } from './lib/auth.js';
 import { loadTemplates, instantiate } from './lib/templates.js';
@@ -28,6 +29,7 @@ let checks = JSON.parse(await readFile(existsSync(CHECKS_FILE) ? CHECKS_FILE : p
 let history = existsSync(HISTORY_FILE) ? JSON.parse(await readFile(HISTORY_FILE, 'utf8')) : [];
 const secrets = await createSecretStore(path.join(DATA_DIR, 'secrets.json'), process.env.SECRETS_KEY);
 const WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
+const mailer = createMailer();
 const auth = createAuth(process.env.APP_PASSWORD);
 // PUBLIC_DEMO=1: anyone can view and run checks; only editing needs the password.
 const PUBLIC_DEMO = process.env.PUBLIC_DEMO === '1';
@@ -62,7 +64,7 @@ async function runAndRecord() {
   history = [...results, ...history].slice(0, MAX_HISTORY);
   await mkdir(DATA_DIR, { recursive: true });
   await writeFile(HISTORY_FILE, JSON.stringify(history, null, 2)).catch(() => {});
-  await dispatch(detectTransitions(lastStatus, results), { webhookUrl: WEBHOOK_URL });
+  await dispatch(detectTransitions(lastStatus, results), { webhookUrl: WEBHOOK_URL, mailer });
   return results;
 }
 
@@ -152,6 +154,11 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return send(res, 400, { error: e.message }); }
       const check = buildCheck(parsed, { status: probe.status, secretNames, existingIds: checks.map((c) => c.id) });
       return send(res, 200, redact({ check, preview: probe, secretsSaved: secretNames.map((s) => s.name) }, secrets.values()));
+    }
+    if (pathname === '/api/alerts' && req.method === 'GET') return send(res, 200, { webhook: Boolean(WEBHOOK_URL), email: mailer ? { enabled: true, to: mailer.maskedTo } : { enabled: false } });
+    if (pathname === '/api/alerts/test' && req.method === 'POST') {
+      if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
+      return send(res, 200, await sendTestAlert({ webhookUrl: WEBHOOK_URL, mailer }));
     }
     if (pathname === '/api/history') return send(res, 200, history);
     if (pathname === '/api/run' && req.method === 'POST') return send(res, 200, await runAndRecord());

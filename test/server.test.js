@@ -121,3 +121,20 @@ test('curl import: calls the API once, stores the key as a secret, returns a run
     assert.equal(bad.status, 400);
   } finally { p.kill(); }
 });
+
+import { fakeSmtp } from '../test-support/fake-smtp.js';
+
+test('server: test alert goes out by email, status endpoint shows masked address, guests cannot trigger it', async () => {
+  const { server, log, port } = await fakeSmtp();
+  const p = await startServer(3806, { APP_PASSWORD: 'pw123', PUBLIC_DEMO: '1', SMTP_HOST: 'localhost', SMTP_PORT: String(port), SMTP_SECURE: '0', ALERT_EMAIL_FROM: 'alerts@x.test', ALERT_EMAIL_TO: 'alice@example.test' });
+  try {
+    assert.equal((await call(3806, '/api/alerts/test', { method: 'POST' })).status, 401);
+    const { json } = await call(3806, '/api/login', { method: 'POST', body: { password: 'pw123' } });
+    const h = { authorization: `Bearer ${json.token}` };
+    assert.deepEqual((await call(3806, '/api/alerts', { headers: h })).json, { webhook: false, email: { enabled: true, to: ['a***@example.test'] } });
+    const t = await call(3806, '/api/alerts/test', { method: 'POST', headers: h });
+    assert.equal(t.json.email, 'sent');
+    assert.ok(log.cmds.includes('RCPT TO:<alice@example.test>'));
+    assert.match(Buffer.from(log.data.split('\n\n').slice(1).join('').replace(/\s/g, ''), 'base64').toString(), /Test alert/);
+  } finally { p.kill(); server.close(); }
+});
