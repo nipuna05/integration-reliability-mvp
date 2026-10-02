@@ -116,7 +116,7 @@ async function boot() {
   $('break').classList.toggle('hidden', locked);
   $('fix').classList.toggle('hidden', locked);
   $('editToggle').classList.toggle('hidden', locked || !session.canEdit);
-  $('logout').classList.toggle('hidden', !session.authRequired || locked);
+  $('logout').classList.toggle('hidden', !session.authRequired || !session.authed);
   $('editNote').textContent = signinOffered ? 'Viewing as guest. Sign in above to edit checks.' : (!locked && !session.canEdit ? 'Editing is off here (set APP_PASSWORD on the server to enable it).' : '');
   if (!locked) render().catch(() => {});
 }
