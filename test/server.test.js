@@ -74,3 +74,21 @@ test('PUBLIC_DEMO: guests can view and run, but not edit or use the editor APIs'
     assert.deepEqual([s.authed, s.canEdit, s.publicRead], [false, false, true]);
   } finally { p.kill(); }
 });
+
+test('secrets API: names only, locked without login, used by a check', async () => {
+  const p = await startServer(3804, { APP_PASSWORD: 'pw123', SECRETS_KEY: 'test-key' });
+  try {
+    const { json } = await call(3804, '/api/login', { method: 'POST', body: { password: 'pw123' } });
+    const h = { authorization: `Bearer ${json.token}` };
+    assert.equal((await call(3804, '/api/secrets')).status, 401);
+    assert.equal((await call(3804, '/api/secrets/DEMO_KEY', { method: 'PUT', body: { value: 'demo-key-123' } })).status, 401);
+    assert.equal((await call(3804, '/api/secrets/DEMO_KEY', { method: 'PUT', body: { value: 'demo-key-123' }, headers: h })).status, 200);
+    assert.equal((await call(3804, '/api/secrets/bad name!', { method: 'PUT', body: { value: 'x' }, headers: h })).status, 404);
+    const list = (await call(3804, '/api/secrets', { headers: h })).json;
+    assert.deepEqual(list, { names: ['DEMO_KEY'], encrypted: true });
+    const chk = [{ id: 's', name: 'S', steps: [{ name: 'ping', url: '{{base}}/demo/secure/ping', headers: { authorization: 'Bearer {{secret.DEMO_KEY}}' }, expect: { status: 200 } }] }];
+    assert.equal((await call(3804, '/api/checks/test', { method: 'POST', body: chk, headers: h })).json[0].ok, true);
+    const unknown = JSON.parse(JSON.stringify(chk).replace('DEMO_KEY', 'NOPE'));
+    assert.equal((await call(3804, '/api/checks/test', { method: 'POST', body: unknown, headers: h })).status, 400);
+  } finally { p.kill(); }
+});

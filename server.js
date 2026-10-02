@@ -9,6 +9,7 @@ import { detectTransitions, dispatch } from './lib/alerts.js';
 import { validateChecks } from './lib/checks.js';
 import { createAuth, viaProxy } from './lib/auth.js';
 import { loadTemplates, instantiate } from './lib/templates.js';
+import { createSecretStore } from './lib/secrets.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -22,6 +23,7 @@ const BASE = { base: `http://localhost:${PORT}` };
 // User-edited checks live in data/; checks.json in the repo is the starter set.
 let checks = JSON.parse(await readFile(existsSync(CHECKS_FILE) ? CHECKS_FILE : path.join(root, 'checks.json'), 'utf8'));
 let history = existsSync(HISTORY_FILE) ? JSON.parse(await readFile(HISTORY_FILE, 'utf8')) : [];
+const secrets = await createSecretStore(path.join(DATA_DIR, 'secrets.json'), process.env.SECRETS_KEY);
 const WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL;
 const auth = createAuth(process.env.APP_PASSWORD);
 // PUBLIC_DEMO=1: anyone can view and run checks; only editing needs the password.
@@ -46,7 +48,7 @@ async function readJson(req) {
 }
 
 async function runAndRecord() {
-  const results = await runAll(checks, BASE);
+  const results = await runAll(checks, BASE, { secrets: secrets.values() });
   history = [...results, ...history].slice(0, MAX_HISTORY);
   await mkdir(DATA_DIR, { recursive: true });
   await writeFile(HISTORY_FILE, JSON.stringify(history, null, 2)).catch(() => {});
@@ -84,7 +86,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/checks' && req.method === 'PUT') {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
       const next = await readJson(req);
-      const errors = validateChecks(next);
+      const errors = validateChecks(next, secrets.names());
       if (errors.length) return send(res, 400, { errors });
       checks = next;
       await mkdir(DATA_DIR, { recursive: true });
@@ -94,10 +96,10 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/checks/test' && req.method === 'POST') {
       if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
       const next = await readJson(req);
-      const errors = validateChecks(next);
+      const errors = validateChecks(next, secrets.names());
       if (errors.length) return send(res, 400, { errors });
       const results = [];
-      for (const c of next) results.push(await runCheck(c, BASE)); // not recorded in history
+      for (const c of next) results.push(await runCheck(c, BASE, { secrets: secrets.values() })); // not recorded in history
       return send(res, 200, results);
     }
     if (pathname === '/api/templates' && req.method === 'GET') return send(res, 200, templates.map(({ id, title, description, params }) => ({ id, title, description, params })));
@@ -106,6 +108,16 @@ const server = http.createServer(async (req, res) => {
       const t = templates.find((x) => x.id === templateId);
       if (!t) return send(res, 404, { error: 'unknown template' });
       return send(res, 200, instantiate(t, values, checks.map((c) => c.id)));
+    }
+    if (pathname === '/api/secrets' && req.method === 'GET') return send(res, 200, { names: secrets.names(), encrypted: secrets.encrypted });
+    const sm = pathname.match(/^\/api\/secrets\/([A-Za-z0-9_]+)$/);
+    if (sm) {
+      if (!canEdit(req)) return send(res, 403, { error: 'editing is disabled here: set APP_PASSWORD and log in' });
+      if (req.method === 'PUT') {
+        try { await secrets.set(sm[1], (await readJson(req)).value); } catch (e) { return send(res, 400, { error: e.message }); }
+        return send(res, 200, { saved: sm[1] });
+      }
+      if (req.method === 'DELETE') { await secrets.remove(sm[1]); return send(res, 200, { deleted: sm[1] }); }
     }
     if (pathname === '/api/history') return send(res, 200, history);
     if (pathname === '/api/run' && req.method === 'POST') return send(res, 200, await runAndRecord());

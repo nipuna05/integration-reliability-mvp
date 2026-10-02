@@ -56,6 +56,13 @@
         <div id="tplParams"></div>
         <div class="bar" style="margin:10px 0 0"><button id="tplAdd">Add to editor</button></div>
       </div>
+      <div class="card" style="background:transparent">
+        <strong>Secrets (API keys)</strong>
+        <p class="muted">Stored on the server only; values are never shown again. Use in a check as <code>{{secret.NAME}}</code>, e.g. <code>"headers": { "authorization": "Bearer {{secret.PAYROLL_TOKEN}}" }</code>. <span id="secEnc"></span></p>
+        <div id="secList" class="muted"></div>
+        <div class="bar" style="margin:10px 0 0"><input class="tp" id="secName" placeholder="NAME_LIKE_THIS" style="width:200px"><input type="password" id="secVal" placeholder="value"><button id="secSave">Save secret</button></div>
+        <div class="fail" id="secErr"></div>
+      </div>
       <textarea id="json" spellcheck="false"></textarea>
       <div class="bar" style="margin:10px 0 0"><button id="test">Test</button><button class="primary" id="save">Save</button></div>
       <pre class="out" id="editOut"></pre>
@@ -113,6 +120,24 @@ $('signin').onclick = async () => {
 $('pw').onkeydown = (e) => { if (e.key === 'Enter') $('signin').click(); };
 $('logout').onclick = async () => { await fetch('/api/logout', { method: 'POST' }); boot(); };
 
+async function loadSecrets() {
+  const { names, encrypted } = await (await api('/api/secrets')).json();
+  $('secEnc').textContent = encrypted ? 'Encrypted at rest.' : 'Not encrypted at rest: set SECRETS_KEY on the server to encrypt.';
+  $('secList').innerHTML = names.length
+    ? names.map((n) => `<span style="margin-right:12px"><b>${esc(n)}</b> <a href="#" data-del="${esc(n)}">remove</a></span>`).join('')
+    : 'No secrets yet.';
+  $('secList').querySelectorAll('[data-del]').forEach((a) => a.onclick = async (e) => {
+    e.preventDefault();
+    await api('/api/secrets/' + a.dataset.del, { method: 'DELETE' });
+    loadSecrets();
+  });
+}
+$('secSave').onclick = async () => {
+  const r = await api('/api/secrets/' + encodeURIComponent($('secName').value.trim()), { method: 'PUT', body: JSON.stringify({ value: $('secVal').value }) });
+  $('secErr').textContent = r.ok ? '' : (await r.json()).error;
+  if (r.ok) { $('secName').value = ''; $('secVal').value = ''; loadSecrets(); }
+};
+
 let templates = [];
 function showTemplate() {
   const t = templates.find((x) => x.id === $('tplSel').value);
@@ -139,6 +164,7 @@ $('editToggle').onclick = async () => {
     templates = await (await api('/api/templates')).json();
     $('tplSel').innerHTML = templates.map((t) => `<option value="${esc(t.id)}">${esc(t.title)}</option>`).join('');
     showTemplate();
+    loadSecrets();
   }
 };
 const editorCall = async (url, method) => {

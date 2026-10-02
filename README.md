@@ -27,3 +27,6 @@ Set APP_PASSWORD to require a login for the API/dashboard and to enable the chec
 
 ## Templates
 In the dashboard: Edit checks -> Add from template. Templates live in 	emplates/*.json (HR->Payroll, CRM->Billing, webhook delivered, API returns expected value). Add your own by dropping a JSON file there; `<<KEY>>` placeholders become form fields.
+
+## Secrets (API keys)
+Dashboard -> Edit checks -> Secrets. Save a key once, then use `{{secret.NAME}}` in a check, e.g. `"headers": { "authorization": "Bearer {{secret.PAYROLL_TOKEN}}" }`. Values stay on the server, are never returned by the API, and are masked (***) in results, history and alerts. Set `SECRETS_KEY` to encrypt them at rest (AES-256-GCM); keep that key safe, without it an encrypted secrets file cannot be read.
