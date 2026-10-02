@@ -76,7 +76,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (pathname.startsWith('/demo/')) return await handleDemo(req, res, pathname);
     if (pathname === '/healthz') return send(res, 200, { ok: true });
-    if (pathname === '/') return send(res, 200, await readFile(path.join(root, 'public', 'index.html'), 'utf8'), 'text/html');
+    if (pathname === '/') return send(res, 200, await readFile(path.join(root, 'public', 'index.html'), 'utf8'), 'text/html', { 'cache-control': 'no-store' });
 
     if (pathname === '/api/session') return send(res, 200, { authRequired: auth.enabled, authed: auth.isAuthed(req), canEdit: canEdit(req), publicRead: PUBLIC_DEMO });
     if (pathname === '/api/login' && req.method === 'POST') {
